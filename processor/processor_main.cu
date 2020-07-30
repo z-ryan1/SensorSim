@@ -9,7 +9,7 @@
 using namespace std;
 
 #define MIN_MSG_TO_PRINT    10
-#define MIN_MSG_TO_PROCESS  1'000'000  //CPU count our GPU count
+#define MIN_MSG_TO_PROCESS  10'00'000  //CPU count our GPU count
 
 
 void PrintUsage()
@@ -83,8 +83,13 @@ int main(int argc,char *argv[], char *envp[]) {
     }
     else if(mode == "CPU-COUNT")
     {
-        cout << "This processor will count zeros in " << MIN_MSG_TO_PROCESS << " msg then exit" << endl;
+        cout << "This processor will count zeros in " << MIN_MSG_TO_PROCESS << " msg using the CPU" << endl;
         p.procCountZerosCPU(MIN_MSG_TO_PROCESS);
+    }
+    else if(mode == "GPU-COUNT")
+    {
+        cout << "This processor will count zeros in " << MIN_MSG_TO_PROCESS << " msg using the GPU" << endl;
+        p.procCountZerosGPU(MIN_MSG_TO_PROCESS);
     }
 
     return 0;

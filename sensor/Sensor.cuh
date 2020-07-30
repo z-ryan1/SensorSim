@@ -9,7 +9,7 @@
 #include <iostream>
 #include <pcap.h>
 
-#include "../util.cuh"
+#include "../common.cuh"
 #include "../Message.cuh"
 #include "../Transport.cuh"
 

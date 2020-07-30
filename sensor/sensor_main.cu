@@ -2,14 +2,11 @@
 #include <unistd.h>
 #include <chrono>
 
-#include "../util.cuh"
+#include "../common.cuh"
 #include "../Message.cuh"
 #include "../Transport.cuh"
 
 #include "Sensor.cuh"
-
-#define RAND_FLOW_MSG_SIZE 2096
-#define RAND_FLOW_MSG_COUNT 1024
 
 using namespace std;
 
@@ -79,14 +76,14 @@ int main(int argc,char *argv[], char *envp[]) {
     cout << "Local Address: " << (srcAddr.empty() ? "Default" : srcAddr) << endl;
     cout << "Target Address: " << dstAddr << " Port: " << dstPort << endl;
     cout << "Mode: " << mode << endl;
-    cout << "Source file: " << fileName << endl << endl;
+    cout << "Source: " << (fileName.empty() ? "Random Stream" : fileName) << endl << endl;
 
     //Create the Sensor
     Transport* t = new Transport(srcAddr, dstPort, dstAddr, dstPort);
     Sensor s = Sensor(t);
 
     (fileName.empty()) ? s.createRandomFlow(RAND_FLOW_MSG_SIZE, RAND_FLOW_MSG_COUNT) :  s.createPCAPFlow(fileName);
-    cout << "Sensor Flow has " << s.getFlowLength() << " messages" << endl;
+    cout << "Sensor Flow has " << s.getFlowLength() << " messages of size " << RAND_FLOW_MSG_SIZE << endl;
     cout << "sending flow for " << timeToRun << " seconds" << endl;
 
     //Transmit or Print the Flow
