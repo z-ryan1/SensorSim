@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include "util.cuh"
+#include "common.cuh"
 #include "Message.cuh"
 
 using namespace std;
@@ -19,7 +19,8 @@ public:
     Transport(string srcAddr, int srcPort, string dstAddr, int dstPort);
 
     int push(Message* msg);
-    int pop(vector<Message>& msg, int numReqMsg, int& numRetMsg);
+    int pop(Message msg[MSG_BLOCK_SIZE], int numReqMsg, int& numRetMsg);
+    //int pop(vector<Message>& msg, int numReqMsg, int& numRetMsg);
 
 
 private:

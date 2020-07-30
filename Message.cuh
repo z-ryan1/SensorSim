@@ -9,6 +9,9 @@
 #include <stdint.h>
 #include <cstdint>
 #include <iostream>
+#include <iomanip>
+
+#include "common.cuh"
 
 using namespace std;
 
@@ -17,8 +20,9 @@ public:
     int interval; //Number of us since last Message
     int bufferSize; //Size in bytes of the Message
     int seqNumber; //Position of the Message in the flow
-    uint8_t* buffer;
+    uint8_t buffer[MAX_MESSAGE_SIZE];
 
+    Message();
     Message(int seqNumber, int interval, int bufferSize, uint8_t* buffer);
     ~Message();
 

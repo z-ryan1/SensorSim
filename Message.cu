@@ -6,17 +6,21 @@
 
 using namespace std;
 
-Message::Message(int seqNumber, int interval, int bufferSize, uint8_t *buffer) {
-    seqNumber = seqNumber;
-    interval = interval;
-    bufferSize = bufferSize;
-    buffer = new uint8_t[bufferSize];
+Message::Message() {
+    this->seqNumber = 0;
+    this->interval = 0;
+    this->bufferSize = 0;
+}
 
-    memcpy(buffer, buffer, bufferSize); //TODO: This will do a memory copy makes sense for receive?
+Message::Message(int seqNumber, int interval, int bufferSize, uint8_t *buf) {
+    this->seqNumber = seqNumber;
+    this->interval = interval;
+    this->bufferSize = bufferSize;
+    memcpy(buffer, buf, bufferSize); //TODO: This will do a memory copy makes sense for receive?
 }
 
 Message::~Message() {
-    delete[] buffer;
+
 }
 
 
@@ -28,9 +32,9 @@ ostream& operator<<(ostream& os, const Message& m) {
 void Message::printBuffer(int byteCount) {
     cout << *this; //Print the Message Header first
 
-    int lastByte = this->bufferSize;
+    int lastByte = bufferSize;
 
-    if(byteCount != 0 && byteCount > 0 && byteCount <= this->bufferSize)
+    if(byteCount != 0 && byteCount > 0 && byteCount <= bufferSize)
         lastByte = byteCount;
 
     for (int j=0; (j < lastByte ) ; j++) {
@@ -39,9 +43,10 @@ void Message::printBuffer(int byteCount) {
             cout << endl;
 
         // Print each octet as hex (x), make sure there is always two characters (.2).
-        printf("%02X ", this->buffer[j]);
+        //cout << std::setfill('0') << std::setw(2) << hex << (0xff & (unsigned int)buffer[j]) << " ";
+        printf("%02hhX ", buffer[j]);
     }
-
+    cout << endl;
 }
 
 
