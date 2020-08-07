@@ -10,7 +10,7 @@
 #include <assert.h>
 
 #include "../Message.cuh"
-#include "../Transport.cuh"
+#include "../transport/iTransport.cuh"
 
 __global__ void gpu_count_zeros(Message* flow, int* sum, int flowLength);
 void cpu_count_zeros(Message* flow, int* sum, int flowLength);
@@ -19,7 +19,7 @@ class Processor {
 public:
 
     // Constructor declaration
-    explicit Processor(Transport *t);
+    explicit Processor(iTransport *t);
 
     //pop a message and process if you get one.
     int procPrintMessages(int minMsg);
@@ -28,7 +28,7 @@ public:
     void procCountZerosGPU(int i);
 
 private:
-    Transport *transport;
+    iTransport *transport;
 
 
 };

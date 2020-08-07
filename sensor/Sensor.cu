@@ -4,7 +4,7 @@
 
 #include "Sensor.cuh"
 
-Sensor::Sensor(Transport* t) {
+Sensor::Sensor(iTransport* t) {
     transport = t;
 }
 

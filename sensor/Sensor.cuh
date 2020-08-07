@@ -11,14 +11,14 @@
 
 #include "../common.cuh"
 #include "../Message.cuh"
-#include "../Transport.cuh"
+#include "../transport/iTransport.cuh"
 
 
 using namespace std;
 
 class Sensor {
 public:
-    Sensor(Transport* t); // Constructor declaration
+    Sensor(iTransport* t); // Constructor declaration
 
 
     //Flow Creation Functions
@@ -34,7 +34,7 @@ public:
 
 private:
     vector<Message*> flow; //Number of us since last Message
-    Transport* transport;
+    iTransport* transport;
 
 };
 

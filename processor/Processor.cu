@@ -48,7 +48,7 @@ void cpu_count_zeros(Message* flow, int& sum, int flowLength)
 }
 
 
-Processor::Processor(Transport* t) {
+Processor::Processor(iTransport* t) {
     transport = t;
 }
 
@@ -84,7 +84,7 @@ void Processor::procCountZerosGPU(int minMessageToProcess) {
     start = chrono::system_clock::now();
     while (processedMessages < minMessageToProcess) {
 
-        if (0 != transport->pop(m, MSG_BLOCK_SIZE, msgCountReturned)) {
+        if (0 != transport->pop(m, MSG_BLOCK_SIZE, msgCountReturned, eTransportDest::DEVICE)) {
             exit(EXIT_FAILURE);
         }
 
@@ -134,7 +134,7 @@ int Processor::procCountZerosCPU(int minMessageToProcess) {
     start = chrono::system_clock::now();
     while (processedMessages < minMessageToProcess) {
 
-        if (0 != transport->pop(m, MSG_BLOCK_SIZE, msgCountReturned)) {
+        if (0 != transport->pop(m, MSG_BLOCK_SIZE, msgCountReturned, eTransportDest::HOST)) {
             exit(EXIT_FAILURE);
         }
 
@@ -159,7 +159,7 @@ int Processor::procPrintMessages(int minMessageToProcess) {
     int r = 0;
 
     while (r < minMessageToProcess) {
-        if (0 != transport->pop(m, MSG_BLOCK_SIZE, r)) {
+        if (0 != transport->pop(m, MSG_BLOCK_SIZE, r, eTransportDest::HOST)) {
             exit(EXIT_FAILURE);
         }
     }
