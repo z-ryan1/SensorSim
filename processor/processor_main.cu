@@ -2,9 +2,10 @@
 #include <unistd.h>
 
 #include "../Message.cuh"
-#include "../Transport.cuh"
+#include "../transport/iTransport.cuh"
 
 #include "Processor.cuh"
+#include "../transport/UDPTransport.cuh"
 
 using namespace std;
 
@@ -17,6 +18,7 @@ void PrintUsage()
     cout << "usage: processorSim [ -s pcap ] [-m mode] remote-addr remote-port" << endl;
     cout << "\t remote-addr remote-port - ipv4 address of a sensorSim" << endl;
     cout << "\t[-m mode] - run mode: PRINT, CPU-COUNT, GPU-COUNT (default: PRINT)" << endl;
+    cout << "\t[-t mode] - transport to use: UDP, UD, UCX (default: UDP)" << endl;
     cout << "\t[-l local-addr] - local ipv4 addresss to bind. (default: bind to first address)" << endl;
 }
 
@@ -31,8 +33,9 @@ int main(int argc,char *argv[], char *envp[]) {
     int dstPort = 0;
     string srcAddr;
     char hostBuffer[256];
+    string tmode = "UDP";
 
-    while ((op = getopt(argc, argv, "m:s:l:")) != -1) {
+    while ((op = getopt(argc, argv, "m:s:l:t:")) != -1) {
         switch (op) {
             case 'l':
                 srcAddr = optarg;
@@ -40,6 +43,14 @@ int main(int argc,char *argv[], char *envp[]) {
             case 'm':
                 mode = optarg;
                 if (mode != "PRINT" && mode != "CPU-COUNT" && mode != "GPU-COUNT")
+                {
+                    PrintUsage();
+                    return -1;
+                }
+                break;
+            case 't':
+                tmode = optarg;
+                if (mode != "UDP" && mode != "RDMA-UD")
                 {
                     PrintUsage();
                     return -1;
@@ -70,10 +81,17 @@ int main(int argc,char *argv[], char *envp[]) {
     cout << "Running on " << hostBuffer <<endl;
     cout << "Local Address: " << (srcAddr.empty() ? "Default" : srcAddr) << endl;
     cout << "Sensor Address: " << dstAddr << " Port: " << dstPort << endl;
-    cout << "Mode: " << mode << endl;
+    cout << "Processor Mode: " << mode << endl;
+    cout << "Processor Mode: " << tmode << endl;
 
-    //Create the Sensor
-    Transport* t = new Transport(srcAddr, dstPort, dstAddr, dstPort);
+
+    //Create the Transport
+    iTransport* t;
+    if(tmode == "UDP")
+        t = new UDPTransport(srcAddr, dstPort, dstAddr, dstPort);
+    // else if(tmode == "RDMA-UD")
+    //t = new RDMAUDTransport(srcAddr, dstPort, dstAddr, dstPort);
+
     Processor p = Processor(t);
 
     if(mode == "PRINT")

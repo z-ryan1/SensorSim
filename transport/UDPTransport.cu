@@ -6,12 +6,10 @@
 #include <arpa/inet.h>
 #include <iostream>
 
-#include "Transport.cuh"
+#include "UDPTransport.cuh"
 
-int push(Message m);
-int pop(Message& m);
+UDPTransport::UDPTransport(string srcAddr, int srcPort, string dstAddr, int dstPort) {
 
-Transport::Transport(string srcAddr, int srcPort, string dstAddr, int dstPort) {
     s_srcAddr = srcAddr;
     n_srcPort = srcPort;
     s_dstAddr = dstAddr;
@@ -52,7 +50,7 @@ Transport::Transport(string srcAddr, int srcPort, string dstAddr, int dstPort) {
 
 }
 
-int Transport::push(Message* m)
+int UDPTransport::push(Message* m)
 {
     sendto(this->sockfd, (const char *)m->buffer, m->bufferSize,
            MSG_CONFIRM, (const struct sockaddr *) &this->g_dstAddr, sizeof(this->g_dstAddr));
@@ -64,39 +62,9 @@ int Transport::push(Message* m)
 }
 
 /*
- *  Pulls a message from the transport and places it in the buffer
- */
-/*int Transport::pop(vector<Message>& m, int numReqMsg, int& numRetMsg) //TODO:Remove this function since vector not supported in cuda
-{
-   uint8_t buffer[MAX_MESSAGE_SIZE];    // receive buffer
-   int recvlen;                         // num bytes received
-   struct sockaddr_in from;             // Sender's address. TODO: Don't need these, just waste perf
-   int fromlen;                         // Length of sender's address.
-
-    DEBUG("waiting on port " << this->n_srcPort << endl);
-
-   for(int i = 0; i < numReqMsg; i++)
-   {
-       recvlen = recvfrom(this->sockfd, buffer, MAX_MESSAGE_SIZE, MSG_DONTWAIT, reinterpret_cast<sockaddr *>(&from),
-                          reinterpret_cast<socklen_t *>(&fromlen));
-
-       if (recvlen > 0) {
-           //cout << "received " << recvlen << " bytes " << "from " << inet_ntoa(from.sin_addr) << endl;
-           m.emplace_back(i,0,recvlen, buffer); //TODO: doing a copy in here, not good.
-           numRetMsg = numRetMsg + 1;
-       } else if(recvlen == -1) {
-           //Nothing on Socket
-           return 0;
-       }
-   }
-
-    return 0;
-}*/
-
-/*
 *  Pulls a message from the transport and places it in the buffer
 */
-int Transport::pop(Message* m, int numReqMsg, int& numRetMsg)
+int UDPTransport::pop(Message* m, int numReqMsg, int& numRetMsg, eTransportDest dest)
 {
     uint8_t buffer[MAX_MESSAGE_SIZE];    // receive buffer
     int recvlen;                         // num bytes received

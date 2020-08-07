@@ -4,7 +4,8 @@
 
 #include "../common.cuh"
 #include "../Message.cuh"
-#include "../Transport.cuh"
+#include "../transport/iTransport.cuh"
+#include "../transport/UDPTransport.cuh"
 
 #include "Sensor.cuh"
 
@@ -79,7 +80,7 @@ int main(int argc,char *argv[], char *envp[]) {
     cout << "Source: " << (fileName.empty() ? "Random Stream" : fileName) << endl << endl;
 
     //Create the Sensor
-    Transport* t = new Transport(srcAddr, dstPort, dstAddr, dstPort);
+    iTransport* t = new UDPTransport(srcAddr, dstPort, dstAddr, dstPort);
     Sensor s = Sensor(t);
 
     (fileName.empty()) ? s.createRandomFlow(RAND_FLOW_MSG_SIZE, RAND_FLOW_MSG_COUNT) :  s.createPCAPFlow(fileName);
