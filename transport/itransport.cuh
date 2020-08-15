@@ -10,7 +10,7 @@
 enum class eTransportDest {HOST, DEVICE};
 enum class eTransportType {UDP, RDMA_UD};
 
-class iTransport {
+class ITransport {
 
 public:
 
@@ -31,14 +31,13 @@ public:
     }
 
 protected:
+    //All Transports will use basic IPoX as a control plane to establish a connection.
     string                      s_dstAddr;
     int 						n_dstPort;
     string                      s_srcAddr;
     int 						n_srcPort;
-
     struct sockaddr_in			g_srcAddr;
     struct sockaddr_in			g_dstAddr;
-
     int sockfd;
 
     eTransportType              transportType;

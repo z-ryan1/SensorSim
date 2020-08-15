@@ -1,16 +1,16 @@
+#include "Processor.cuh"
+
 #include <iostream>
 #include <unistd.h>
 
 #include "../Message.cuh"
-#include "../transport/iTransport.cuh"
+#include "../transport/itransport.cuh"
+#include "../transport/udp_transport.cuh"
+#include "../transport/rdma_ud_transport.cuh"
 
-#include "Processor.cuh"
-#include "../transport/UDPTransport.cuh"
-
-using namespace std;
 
 #define MIN_MSG_TO_PRINT    10
-#define MIN_MSG_TO_PROCESS  10'00'000  //CPU count our GPU count
+#define MIN_MSG_TO_PROCESS  10'000'000  //CPU count our GPU count
 
 
 void PrintUsage()
@@ -18,7 +18,7 @@ void PrintUsage()
     cout << "usage: processorSim [ -s pcap ] [-m mode] remote-addr remote-port" << endl;
     cout << "\t remote-addr remote-port - ipv4 address of a sensorSim" << endl;
     cout << "\t[-m mode] - run mode: PRINT, CPU-COUNT, GPU-COUNT (default: PRINT)" << endl;
-    cout << "\t[-t mode] - transport to use: UDP, UD, UCX (default: UDP)" << endl;
+    cout << "\t[-t mode] - transport to use: UDP, RDMA-UD, UCX (default: UDP)" << endl;
     cout << "\t[-l local-addr] - local ipv4 addresss to bind. (default: bind to first address)" << endl;
 }
 
@@ -50,7 +50,7 @@ int main(int argc,char *argv[], char *envp[]) {
                 break;
             case 't':
                 tmode = optarg;
-                if (mode != "UDP" && mode != "RDMA-UD")
+                if (tmode != "UDP" && tmode != "RDMA-UD")
                 {
                     PrintUsage();
                     return -1;
@@ -82,15 +82,15 @@ int main(int argc,char *argv[], char *envp[]) {
     cout << "Local Address: " << (srcAddr.empty() ? "Default" : srcAddr) << endl;
     cout << "Sensor Address: " << dstAddr << " Port: " << dstPort << endl;
     cout << "Processor Mode: " << mode << endl;
-    cout << "Processor Mode: " << tmode << endl;
+    cout << "Transport Mode: " << tmode << endl;
 
 
     //Create the Transport
-    iTransport* t;
+    ITransport* t;
     if(tmode == "UDP")
-        t = new UDPTransport(srcAddr, dstPort, dstAddr, dstPort);
-    // else if(tmode == "RDMA-UD")
-    //t = new RDMAUDTransport(srcAddr, dstPort, dstAddr, dstPort);
+        t = new UpdTransport(srcAddr, dstPort, dstAddr, dstPort);
+    else if(tmode == "RDMA-UD")
+        t = new RdmaUdTransport(srcAddr, dstPort, dstAddr, dstPort, eTransportRole::PROCESSOR);
 
     Processor p = Processor(t);
 

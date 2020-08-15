@@ -1,23 +1,24 @@
+#include "Sensor.cuh"
+
 #include <iostream>
 #include <unistd.h>
 #include <chrono>
 
 #include "../common.cuh"
 #include "../Message.cuh"
-#include "../transport/iTransport.cuh"
-#include "../transport/UDPTransport.cuh"
+#include "../transport/itransport.cuh"
+#include "../transport/udp_transport.cuh"
+#include "../transport/rdma_ud_transport.cuh"
 
-#include "Sensor.cuh"
 
-using namespace std;
 
 void PrintUsage()
 {
-    cout << "usage: sensorSim [ -s pcap ] [-m mode] remote-addr remote-port" << endl;
+    cout << "usage: sensorSim [ -s pcap ] [-t mode] [-l local-addr] [-d duration] remote-addr remote-port" << endl;
     cout << "\t remote-addr remote-port - ipv4 address of a processorSim" << endl;
     cout << "\t[-s file] - datafile to use as Sensor flow, accepts pcap format (default: random 256b pattern)" << endl;
-    cout << "\t[-m mode] - run mode, PRINT, UDP (default: PRINT)" << endl;
-    cout << "\t[-t time] - time to run in seconds. (default: 60 sec)" << endl;
+    cout << "\t[-t transport mode] - transport mode, PRINT, UDP, RDMA-UD (default: PRINT)" << endl;
+    cout << "\t[-d time] - time to run in seconds. (default: 60 sec)" << endl;
     cout << "\t[-l file] - local ip addresss to bind. (default: bind to first address)" << endl;
 }
 
@@ -27,14 +28,14 @@ int main(int argc,char *argv[], char *envp[]) {
      */
     int op;
     string fileName;
-    string mode = "PRINT";
+    string tmode = "PRINT";
     string dstAddr;
     int dstPort = 0;
     string srcAddr;
     int timeToRun = 60;
     char hostBuffer[256];
 
-    while ((op = getopt(argc, argv, "m:s:l:t:")) != -1) {
+    while ((op = getopt(argc, argv, "d:s:l:t:")) != -1) {
         switch (op) {
             case 'l':
                 srcAddr = optarg;
@@ -42,15 +43,15 @@ int main(int argc,char *argv[], char *envp[]) {
             case 's':
                 fileName = optarg;
                 break;
-            case 'm':
-                mode = optarg;
-                if (mode != "PRINT" && mode != "UDP")
+            case 't':
+                tmode = optarg;
+                if (tmode != "PRINT" && tmode != "UDP" && tmode != "RDMA-UD")
                 {
                     PrintUsage();
                     return -1;
                 }
                 break;
-            case 't':
+            case 'd':
                 timeToRun = atoi(optarg);
                 break;
             default:
@@ -59,7 +60,7 @@ int main(int argc,char *argv[], char *envp[]) {
         }
     }
 
-    if(argc <= optind)
+    if(argc <= optind+1)
     {
         PrintUsage();
         return -1;
@@ -76,11 +77,17 @@ int main(int argc,char *argv[], char *envp[]) {
     cout << "Running on " << hostBuffer <<endl;
     cout << "Local Address: " << (srcAddr.empty() ? "Default" : srcAddr) << endl;
     cout << "Target Address: " << dstAddr << " Port: " << dstPort << endl;
-    cout << "Mode: " << mode << endl;
-    cout << "Source: " << (fileName.empty() ? "Random Stream" : fileName) << endl << endl;
+    cout << "Source: " << (fileName.empty() ? "Random Stream" : fileName) << endl;
+    cout << "Transport Mode: " << tmode << endl <<endl;
+
+    //Create the Transport
+    ITransport* t;
+    if(tmode == "UDP")
+        t = new UpdTransport(srcAddr, dstPort, dstAddr, dstPort);
+    else if(tmode == "RDMA-UD")
+        t = new RdmaUdTransport(srcAddr, dstPort, dstAddr, dstPort, eTransportRole::SENSOR);
 
     //Create the Sensor
-    iTransport* t = new UDPTransport(srcAddr, dstPort, dstAddr, dstPort);
     Sensor s = Sensor(t);
 
     (fileName.empty()) ? s.createRandomFlow(RAND_FLOW_MSG_SIZE, RAND_FLOW_MSG_COUNT) :  s.createPCAPFlow(fileName);
@@ -88,22 +95,21 @@ int main(int argc,char *argv[], char *envp[]) {
     cout << "sending flow for " << timeToRun << " seconds" << endl;
 
     //Transmit or Print the Flow
-    if (mode == "UDP")
-    {
-        //UDP Send
+    if (tmode == "PRINT") {
+        s.printFlow();
+    } else {
         chrono::time_point<chrono::system_clock> start;
-        start = chrono::system_clock::now();
         chrono::duration<double> delta;
 
+        start = chrono::system_clock::now();
         do {
-            s.sendFlow();
+            if (0 != s.sendFlow())
+            {
+                cout << "Transport Error Sending sensor Flow - Exiting" << endl;
+                return -1;
+            }
             delta = chrono::system_clock::now() - start;
-            } while(delta.count() <= timeToRun);
-       // }while(true);
-    }
-    else
-    {
-        s.printFlow();
+        } while (delta.count() <= timeToRun);
     }
 
     return 0;

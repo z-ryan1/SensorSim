@@ -10,21 +10,21 @@
 //#define DEBUG_BUILD
 
 #ifdef DEBUG_BUILD
-#define DEBUG(x) cout << x
+#define DEBUG(x) cerr << x
 #define DEBUG_DETAIL(x) x
 #else
 #  define DEBUG(x) do {} while (0)
 #  define DEBUG_DETAIL(x) do {} while (0)
 #endif
 
-
-#define MAX_MESSAGE_SIZE 4096       //Max size of a message in a flow, must be > RAND_FLOW_MSG_SIZE
+#define MSG_MAX_SIZE 8000       //Max size of a message in a flow, must be > RAND_FLOW_MSG_SIZE or max size message from pcap
+#define MSG_BLOCK_SIZE 1000     //Number of messages to process in parallel
 
 //Sensor Defines
 #define RAND_FLOW_MSG_SIZE 1024     //Size of the Messages in Random Flow
 #define RAND_FLOW_MSG_COUNT 1024    //Number of Messages in the Flow
 
-//Processor Defines
-#define MSG_BLOCK_SIZE 1000     //Number of messages to process in parallel
+
+
 
 #endif //SENSORSIM_COMMON_CUH

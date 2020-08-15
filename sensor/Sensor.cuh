@@ -11,14 +11,11 @@
 
 #include "../common.cuh"
 #include "../Message.cuh"
-#include "../transport/iTransport.cuh"
-
-
-using namespace std;
+#include "../transport/itransport.cuh"
 
 class Sensor {
 public:
-    Sensor(iTransport* t); // Constructor declaration
+    Sensor(ITransport* t); // Constructor declaration
 
 
     //Flow Creation Functions
@@ -29,12 +26,11 @@ public:
 
     //Flow display
     void printFlow();
-
-    void sendFlow();
+    int sendFlow();
 
 private:
-    vector<Message*> flow; //Number of us since last Message
-    iTransport* transport;
+    vector<Message*> flow;
+    ITransport* transport;
 
 };
 

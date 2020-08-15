@@ -6,9 +6,9 @@
 #include <arpa/inet.h>
 #include <iostream>
 
-#include "UDPTransport.cuh"
+#include "udp_transport.cuh"
 
-UDPTransport::UDPTransport(string srcAddr, int srcPort, string dstAddr, int dstPort) {
+UpdTransport::UpdTransport(string srcAddr, int srcPort, string dstAddr, int dstPort) {
 
     s_srcAddr = srcAddr;
     n_srcPort = srcPort;
@@ -50,7 +50,7 @@ UDPTransport::UDPTransport(string srcAddr, int srcPort, string dstAddr, int dstP
 
 }
 
-int UDPTransport::push(Message* m)
+int UpdTransport::push(Message* m)
 {
     sendto(this->sockfd, (const char *)m->buffer, m->bufferSize,
            MSG_CONFIRM, (const struct sockaddr *) &this->g_dstAddr, sizeof(this->g_dstAddr));
@@ -64,9 +64,9 @@ int UDPTransport::push(Message* m)
 /*
 *  Pulls a message from the transport and places it in the buffer
 */
-int UDPTransport::pop(Message* m, int numReqMsg, int& numRetMsg, eTransportDest dest)
+int UpdTransport::pop(Message* m, int numReqMsg, int& numRetMsg, eTransportDest dest)
 {
-    uint8_t buffer[MAX_MESSAGE_SIZE];    // receive buffer
+    uint8_t buffer[MSG_MAX_SIZE];    // receive buffer
     int recvlen;                         // num bytes received
     struct sockaddr_in from;             // Sender's address. TODO: Don't need these, just waste perf
     int fromlen;                         // Length of sender's address.
@@ -75,7 +75,7 @@ int UDPTransport::pop(Message* m, int numReqMsg, int& numRetMsg, eTransportDest 
 
     for(int i = 0; i < numReqMsg; i++)
     {
-        recvlen = recvfrom(this->sockfd, buffer, MAX_MESSAGE_SIZE, MSG_DONTWAIT, reinterpret_cast<sockaddr *>(&from),
+        recvlen = recvfrom(this->sockfd, buffer, MSG_MAX_SIZE, MSG_DONTWAIT, reinterpret_cast<sockaddr *>(&from),
                            reinterpret_cast<socklen_t *>(&fromlen));
 
         if (recvlen > 0) {
