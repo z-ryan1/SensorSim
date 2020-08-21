@@ -32,12 +32,12 @@ public:
 
 protected:
     //All Transports will use basic IPoX as a control plane to establish a connection.
-    string                      s_dstAddr;
+    string                      s_mcastAddr;
     int 						n_dstPort;
-    string                      s_srcAddr;
-    int 						n_srcPort;
-    struct sockaddr_in			g_srcAddr;
-    struct sockaddr_in			g_dstAddr;
+    string                      s_localAddr;
+    int 						n_localPort;
+    struct sockaddr_in			g_localAddr;
+    struct sockaddr_in			g_mcastAddr;
     int sockfd;
 
     eTransportType              transportType;

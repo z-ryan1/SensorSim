@@ -10,12 +10,10 @@
 #include "../transport/udp_transport.cuh"
 #include "../transport/rdma_ud_transport.cuh"
 
-
-
 void PrintUsage()
 {
-    cout << "usage: sensorSim [ -s pcap ] [-t mode] [-l local-addr] [-d duration] remote-addr remote-port" << endl;
-    cout << "\t remote-addr remote-port - ipv4 address of a processorSim" << endl;
+    cout << "usage: sensorSim [ -s pcap ] [-t mode] [-l local-addr] [-d duration] mcast-addr" << endl;
+    cout << "\t multicast group where sensor publishes data" << endl;
     cout << "\t[-s file] - datafile to use as Sensor flow, accepts pcap format (default: random 256b pattern)" << endl;
     cout << "\t[-t transport mode] - transport mode, PRINT, UDP, RDMA-UD (default: PRINT)" << endl;
     cout << "\t[-d time] - time to run in seconds. (default: 60 sec)" << endl;
@@ -29,8 +27,7 @@ int main(int argc,char *argv[], char *envp[]) {
     int op;
     string fileName;
     string tmode = "PRINT";
-    string dstAddr;
-    int dstPort = 0;
+    string mcastAddr;
     string srcAddr;
     int timeToRun = 60;
     char hostBuffer[256];
@@ -60,15 +57,14 @@ int main(int argc,char *argv[], char *envp[]) {
         }
     }
 
-    if(argc <= optind+1)
+    if(argc <= optind)
     {
         PrintUsage();
         return -1;
     }
     else
     {
-        dstAddr = argv[optind++];
-        dstPort = atoi(argv[optind]);
+        mcastAddr = argv[optind++];
     }
     gethostname(hostBuffer, sizeof(hostBuffer));
     cout << "********  ********  ********  ********  ********  ********" << endl;
@@ -76,16 +72,16 @@ int main(int argc,char *argv[], char *envp[]) {
     cout << "********  ********  ********  ********  ********  ********" << endl;
     cout << "Running on " << hostBuffer <<endl;
     cout << "Local Address: " << (srcAddr.empty() ? "Default" : srcAddr) << endl;
-    cout << "Target Address: " << dstAddr << " Port: " << dstPort << endl;
+    cout << "Mcast Group Address: " << mcastAddr << endl;
     cout << "Source: " << (fileName.empty() ? "Random Stream" : fileName) << endl;
     cout << "Transport Mode: " << tmode << endl <<endl;
 
     //Create the Transport
     ITransport* t;
-    if(tmode == "UDP")
-        t = new UpdTransport(srcAddr, dstPort, dstAddr, dstPort);
-    else if(tmode == "RDMA-UD")
-        t = new RdmaUdTransport(srcAddr, dstPort, dstAddr, dstPort, eTransportRole::SENSOR);
+    //if(tmode == "UDP")
+        //t = new UpdTransport(srcAddr, dstPort, dstAddr, dstPort);
+    //else if(tmode == "RDMA-UD")
+        t = new RdmaUdTransport(srcAddr, mcastAddr, eTransportRole::SENSOR);
 
     //Create the Sensor
     Sensor s = Sensor(t);
@@ -93,23 +89,35 @@ int main(int argc,char *argv[], char *envp[]) {
     (fileName.empty()) ? s.createRandomFlow(RAND_FLOW_MSG_SIZE, RAND_FLOW_MSG_COUNT) :  s.createPCAPFlow(fileName);
     cout << "Sensor Flow has " << s.getFlowLength() << " messages of size " << RAND_FLOW_MSG_SIZE << endl;
     cout << "sending flow for " << timeToRun << " seconds" << endl;
+    cout << "I will print an update every " << PRINT_UPDATE_DELAY << " seconds" << endl;
 
     //Transmit or Print the Flow
     if (tmode == "PRINT") {
         s.printFlow();
     } else {
-        chrono::time_point<chrono::system_clock> start;
-        chrono::duration<double> delta;
+        timer t_runTime;
+        timer t_nextPrint;
 
-        start = chrono::system_clock::now();
+        long long sentMessages = 0;
+        long long messageRate = 0;
+
         do {
             if (0 != s.sendFlow())
             {
                 cout << "Transport Error Sending sensor Flow - Exiting" << endl;
                 return -1;
             }
-            delta = chrono::system_clock::now() - start;
-        } while (delta.count() <= timeToRun);
+            sentMessages += s.getFlowLength();
+            messageRate += s.getFlowLength();
+
+            //Print the Progress ever 1 Second
+            if(t_nextPrint.seconds_elapsed() > PRINT_UPDATE_DELAY)
+            {
+                cerr << "\rSent " << sentMessages << " messages\t Rate: " << messageRate << "/" << PRINT_UPDATE_DELAY <<"sec";
+                messageRate = 0;
+                t_nextPrint.reset();
+            }
+        } while (t_runTime.seconds_elapsed() <= timeToRun);
     }
 
     return 0;

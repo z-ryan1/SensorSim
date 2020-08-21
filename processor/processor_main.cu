@@ -15,8 +15,8 @@
 
 void PrintUsage()
 {
-    cout << "usage: processorSim [ -s pcap ] [-m mode] remote-addr remote-port" << endl;
-    cout << "\t remote-addr remote-port - ipv4 address of a sensorSim" << endl;
+    cout << "usage: processorSim [ -s pcap ] [-m mode] mcast-addr" << endl;
+    cout << "\t multicast group where sensor publishes data" << endl;
     cout << "\t[-m mode] - run mode: PRINT, CPU-COUNT, GPU-COUNT (default: PRINT)" << endl;
     cout << "\t[-t mode] - transport to use: UDP, RDMA-UD, UCX (default: UDP)" << endl;
     cout << "\t[-l local-addr] - local ipv4 addresss to bind. (default: bind to first address)" << endl;
@@ -29,16 +29,15 @@ int main(int argc,char *argv[], char *envp[]) {
     int op;
     string fileName;
     string mode = "PRINT";
-    string dstAddr;
-    int dstPort = 0;
-    string srcAddr;
+    string mcastAddr;
+    string localAddr;
     char hostBuffer[256];
     string tmode = "UDP";
 
     while ((op = getopt(argc, argv, "m:s:l:t:")) != -1) {
         switch (op) {
             case 'l':
-                srcAddr = optarg;
+                localAddr = optarg;
                 break;
             case 'm':
                 mode = optarg;
@@ -69,8 +68,7 @@ int main(int argc,char *argv[], char *envp[]) {
     }
     else
     {
-        dstAddr = argv[optind++];
-        dstPort = atoi(argv[optind]);
+        mcastAddr = argv[optind++];
     }
 
     gethostname(hostBuffer, sizeof(hostBuffer));
@@ -79,18 +77,18 @@ int main(int argc,char *argv[], char *envp[]) {
     cout << "Processor Simulator - Receive Messages from a sensor and process them" << endl;
     cout << "********  ********  ********  ********  ********  ********" << endl;
     cout << "Running on " << hostBuffer <<endl;
-    cout << "Local Address: " << (srcAddr.empty() ? "Default" : srcAddr) << endl;
-    cout << "Sensor Address: " << dstAddr << " Port: " << dstPort << endl;
+    cout << "Local Address: " << (localAddr.empty() ? "Default" : localAddr) << endl;
+    cout << "Mcast Group Address: " << mcastAddr << endl;
     cout << "Processor Mode: " << mode << endl;
     cout << "Transport Mode: " << tmode << endl;
 
 
     //Create the Transport
     ITransport* t;
-    if(tmode == "UDP")
-        t = new UpdTransport(srcAddr, dstPort, dstAddr, dstPort);
-    else if(tmode == "RDMA-UD")
-        t = new RdmaUdTransport(srcAddr, dstPort, dstAddr, dstPort, eTransportRole::PROCESSOR);
+    //if(tmode == "UDP")
+        //t = new UpdTransport(localAddr, dstPort, mcastAddr, dstPort);
+    //else if(tmode == "RDMA-UD")
+        t = new RdmaUdTransport(localAddr , mcastAddr, eTransportRole::PROCESSOR);
 
     Processor p = Processor(t);
 

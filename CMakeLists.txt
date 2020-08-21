@@ -7,7 +7,6 @@ add_executable(SensorSim
         sensor/sensor_main.cu
         sensor/Sensor.cu
         Message.cu
-        transport/udp_transport.cu
         transport/rdma_ud_transport.cu
         )
 
@@ -17,7 +16,6 @@ add_executable(ProcessorSim
         processor/processor_main.cu
         processor/Processor.cu
         Message.cu
-        transport/udp_transport.cu
         transport/rdma_ud_transport.cu
         )
 

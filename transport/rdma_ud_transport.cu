@@ -47,10 +47,7 @@ void PrintCMEvent(struct rdma_cm_event *event)
     else if(event->event == RDMA_CM_EVENT_UNREACHABLE)
         fprintf(stderr,"DEBUG: Received CM Event(RDMA_CM_EVENT_UNREACHABLE)\n");
     else if(event->event == RDMA_CM_EVENT_REJECTED)
-    {
-        fprintf(stderr,"DEBUG: Received CM Event(RDMA_CM_EVENT_REJECTED)\n");
-        fprintf(stderr,"DEBUG: Status(%u)", event->status);
-    }
+        fprintf(stderr,"DEBUG: Received CM Event(RDMA_CM_EVENT_REJECTED) Status(%u)", event->status );
     else if(event->event == RDMA_CM_EVENT_ESTABLISHED)
         fprintf(stderr,"DEBUG: Received CM Event(RDMA_CM_EVENT_ESTABLISHED)\n");
     else if(event->event == RDMA_CM_EVENT_DISCONNECTED)
@@ -73,26 +70,20 @@ void PrintConnectionInfo(rdma_conn_param cParam)
     fprintf(stderr, "DEBUG: QPN(%d)\n", cParam.qp_num);
 }
 
+RdmaUdTransport::RdmaUdTransport(string localAddr, string mcastAddr, eTransportRole role) {
 
-RdmaUdTransport::RdmaUdTransport(string srcAddr, int srcPort, string dstAddr, int dstPort, eTransportRole role) {
-
-    s_srcAddr = srcAddr;
-    n_srcPort = srcPort;
-    s_dstAddr = dstAddr;
-    n_dstPort = dstPort;
+    ibv_wc wc;
+    s_localAddr = localAddr;
+    s_mcastAddr = mcastAddr;
 
     // Creating socket file descriptor
-    if(RDMACreateChannel() != 0)
+    if(RDMACreateContext() != 0)
     {
         cerr << "Failed Create the RDMA Channel." << endl;
         exit(EXIT_FAILURE);
     }
 
     if(role == eTransportRole::SENSOR) { //Sensor
-        if (RDMAClientInit() != 0) {
-            fprintf(stdout, "Exiting - Failed to initialize the Client Side CM Connection.\n");
-            exit(EXIT_FAILURE);
-        }
 
         if(RDMACreateQP() != 0)
         {
@@ -101,95 +92,44 @@ RdmaUdTransport::RdmaUdTransport(string srcAddr, int srcPort, string dstAddr, in
             exit(EXIT_FAILURE);
         }
 
-        if(RDMAClientConnect() != 0)
-        {
-            fprintf(stdout, "Exiting - Failed to establish connection to client\n");
-            exit(EXIT_FAILURE);
-        }
-
-        /*
-        //Initialize the wqe's used for send
-        sendWQEs.resize(MSG_BLOCK_SIZE);
-        int i = 0; //wr id
-        std::for_each(begin(sendWQEs), end(sendWQEs), [&] (ibv_send_wr &wqe) {
-           initSendWqe(&wqe, i++);
-        });
-        */
-
-        //Register the control plane memory region
-        mr_controlBuffer = create_MEMORY_REGION(&controlBuffer, MSG_MAX_SIZE);
-        memset(controlBuffer, 0xFF, MSG_MAX_SIZE);
-
-        initSendWqe(&controlSendWqe, 0);
-        updateSendWqe(&controlSendWqe, &controlBuffer, MSG_MAX_SIZE, mr_controlBuffer);
-
-        sleep(1); //Wait 1 Second or I get a Completion Error TODO: Fix This CP Error
-
-        post_SEND_WQE(&controlSendWqe);
-        cout << "Sending first control message" << endl;
-
-        //Wait For Completion
-        ibv_wc wc;
-        PollCQ(&wc);
-
     } else { //Processor
-        if (RDMAServerInit() != 0) {
-            fprintf(stdout, "Exiting - Failed to initialize the Server Side CM Connection.\n");
-            exit(EXIT_FAILURE);
-        }
 
-        if(RDMAServerConnect() != 0)
+        if(RDMACreateQP() != 0)
         {
             fprintf(stderr, "Exiting - Failed to establish connection with the client\n");
             exit(EXIT_FAILURE);
         }
 
-        /*
-        //Register the rcvBuffer memory region
-        mr_rcvBuffer = create_MEMORY_REGION(&rcvBuffer, MSG_MAX_SIZE * MSG_BLOCK_SIZE);
-        memset(rcvBuffer, 0x00, MSG_MAX_SIZE * MSG_BLOCK_SIZE);
-
-        //Initialize the wqe's used for receiving and point to the MR
-        rcvWQEs.resize(MSG_BLOCK_SIZE);
-        int i = 0;
-        std::for_each(begin(rcvWQEs), end(rcvWQEs), [&] (ibv_recv_wr &wqe) {
-            initRecvWqe(&wqe, i);
-            //updateRecvWqe(&wqe, &rcvBuffer[i*MSG_MAX_SIZE], MSG_MAX_SIZE, mr_rcvBuffer);
-            updateRecvWqe(&wqe, &rcvBuffer[0], MSG_MAX_SIZE * MSG_BLOCK_SIZE, mr_rcvBuffer);
-            if(i < rcvWQEs.size()-1) { wqe.next = &rcvWQEs[i+1];} //connect the WQES so we can post at once.
-            i++;
-        });
-         */
-
-        //Register the control plane memory region
-        mr_controlBuffer = create_MEMORY_REGION(&controlBuffer, MSG_MAX_SIZE);
-        memset(controlBuffer, 0x00, MSG_MAX_SIZE);
-
-        initRecvWqe(&controlRcvWqe, 0);
-        updateRecvWqe(&controlRcvWqe, &controlBuffer, MSG_MAX_SIZE, mr_controlBuffer);
-
-        //Post the Receive WQE
-        post_RECEIVE_WQE(&controlRcvWqe);
-        cout << "Waiting for first control message" << endl;
-        //Wait For Completion - Print the Initial Message
-        ibv_wc wc;
-        PollCQ(&wc);
-
-
-        Message* m = new Message(1, 0, MSG_MAX_SIZE, controlBuffer);
-        cout << "Established Connection with Sensor printing control message expect all 0xFF" << endl;
-        m->printBuffer(32);
-
     }
 
+    if(RdmaMcastConnect() != 0)
+    {
+        fprintf(stdout, "Exiting - Failed to establish connection to MultiCast Group\n");
+        exit(EXIT_FAILURE);
+    }
 
+    //Initialize the Data Channel
+    mr_dataBuffer = create_MEMORY_REGION(&dataBuffer, MSG_MAX_SIZE);
+    memset(dataBuffer, 0x00, MSG_MAX_SIZE);
+    initSendWqe(&dataSendWqe, 0);
+    updateSendWqe(&dataSendWqe, &dataBuffer, MSG_MAX_SIZE, mr_dataBuffer);
+    initRecvWqe(&dataRcvWqe, 0);
+    updateRecvWqe(&dataRcvWqe, &dataBuffer, MSG_MAX_SIZE, mr_dataBuffer);
+
+    //Register the control plane memory region
+    mr_controlBuffer = create_MEMORY_REGION(&controlBuffer, MSG_MAX_SIZE);
+    memset(controlBuffer, 0x00, MSG_MAX_SIZE);
+    initSendWqe(&controlSendWqe, 0);
+    updateSendWqe(&controlSendWqe, &controlBuffer, MSG_MAX_SIZE, mr_controlBuffer);
+    initRecvWqe(&controlRcvWqe, 0);
+    updateRecvWqe(&controlRcvWqe, &controlBuffer, MSG_MAX_SIZE, mr_controlBuffer);
 
 }
 
 RdmaUdTransport::~RdmaUdTransport() {
     //Clean the RDMA Contexts
-    CleanUpCMContext();
-    CleanUpQPContext();
+    DestroyContext();
+    DestroyQP();
 
     //REmove the Shared MEmory
     delete mr_controlBuffer;
@@ -197,42 +137,48 @@ RdmaUdTransport::~RdmaUdTransport() {
 
 int RdmaUdTransport::push(Message* m)
 {
-    DEBUG("Sent a Msg: " << *m << endl);
+    //usleep(200); //TODO: Take this out
+    //cerr << "NO PUSH OP" << endl;
 
     ibv_mr* mr_msg = create_MEMORY_REGION(&m->buffer, m->bufferSize);
-    initSendWqe(&controlSendWqe, 42);
-    updateSendWqe(&controlSendWqe, &(m->buffer), m->bufferSize, mr_msg);
-    post_SEND_WQE(&controlSendWqe);
 
-    DEBUG("DEBUG: Sent Message:\n");
-    #ifdef DEBUG_BUILD
-        m->printBuffer(32);
-    #endif
+    initSendWqe(&dataSendWqe, 42);
+    updateSendWqe(&dataSendWqe, &(m->buffer), m->bufferSize, mr_msg);
 
-    //Wait For Completion
-    ibv_wc wc;
-    int ret = 0;
+      post_SEND_WQE(&dataSendWqe);
 
-    DEBUG("DEBUG: Waiting for CQE\n");
-    do {
-        ret = ibv_poll_cq(g_cq, 1, &wc);
-    } while(ret == 0);
-    DEBUG("DEBUG: Received " << ret << " CQE Elements\n");
-    DEBUG("DEBUG: WRID(" << wc->wr_id << ")\tStatus(" << wc->status << ")\n");
+       DEBUG("DEBUG: Sent Message:\n");
+      #ifdef DEBUG_BUILD
+          m->printBuffer(32);
+      #endif
 
-    if(wc.status == IBV_WC_RNR_RETRY_EXC_ERR)
-    {
-        usleep(50); //wait 50 us and we will try again.
-        cerr << "DEBUG: WRID(" << wc.wr_id << ")\tStatus(IBV_WC_RNR_RETRY_EXC_ERR)" << endl;
-        return -1;
-    }
-    if(wc.status != IBV_WC_SUCCESS)
-    {
-        cerr << "DEBUG: WRID(" << wc.wr_id << ")\tStatus(" << wc.status << ")" << endl;
-        return -1;
-    }
+      //Wait For Completion
+      int ret = 0;
 
-   usleep(1000); //wait 50 us and we will try again.
+      DEBUG("DEBUG: Waiting for CQE\n");
+      do {
+          ret = ibv_poll_cq(g_cq, 1, &dataWc);
+      } while(ret == 0);
+      DEBUG("DEBUG: Received " << ret << " CQE Elements\n");
+      DEBUG("DEBUG: WRID(" << dataWc.wr_id << ")\tStatus(" << dataWc.status << ")\n");
+
+      if(dataWc.status == IBV_WC_RNR_RETRY_EXC_ERR)
+      {
+          usleep(50); //wait 50 us and we will try again.
+          cerr << "DEBUG: WRID(" << dataWc.wr_id << ")\tStatus(IBV_WC_RNR_RETRY_EXC_ERR)" << endl;
+          ibv_dereg_mr(mr_msg);
+          return -1;
+      }
+      if(dataWc.status != IBV_WC_SUCCESS)
+      {
+          cerr << "DEBUG: WRID(" << dataWc.wr_id << ")\tStatus(" << dataWc.status << ")" << endl;
+          ibv_dereg_mr(mr_msg);
+          return -1;
+      }
+
+    ibv_dereg_mr(mr_msg);
+
+
 
     return 0;
 }
@@ -245,13 +191,14 @@ int RdmaUdTransport::pop(Message* m, int numReqMsg, int& numRetMsg, eTransportDe
     numRetMsg = 0;
 
     do {
+
         //Post the RcvWQE
-        post_RECEIVE_WQE(&controlRcvWqe);
+        post_RECEIVE_WQE(&dataRcvWqe);
 
         int r = 0;
         DEBUG("DEBUG: Waiting for CQE\n");
         do {
-            r = ibv_poll_cq(g_cq, 1, &controlWc);
+            r = ibv_poll_cq(g_cq, 1, &dataWc);
         } while (r == 0);
         DEBUG("DEBUG: Received " << r << " CQE Elements\n");
 
@@ -259,12 +206,12 @@ int RdmaUdTransport::pop(Message* m, int numReqMsg, int& numRetMsg, eTransportDe
 
         for (int j = 0; j < r; j++) {
             DEBUG ("test");
-            DEBUG("DEBUG: WRID(" << controlWc.wr_id <<
-                                 ")\tStatus(" << controlWc.status << ")" <<
-                                 ")\tSize(" << controlWc.byte_len << ")\n");
+            DEBUG("DEBUG: WRID(" << dataWc.wr_id <<
+                                 ")\tStatus(" << dataWc.status << ")" <<
+                                 ")\tSize(" << dataWc.byte_len << ")\n");
         }
 
-        m[numRetMsg-1] = Message(numRetMsg-1, 0, controlWc.byte_len, controlBuffer); //we can reuse the buffer now.
+        m[numRetMsg-1] = Message(numRetMsg-1, 0, dataWc.byte_len, dataBuffer); //we can reuse the buffer now.
         //TODO: Choose to create message buffer in GPU vs CPU Memory.
 
         DEBUG ("DEBUG: Received Message:\n");
@@ -309,6 +256,10 @@ int RdmaUdTransport::initSendWqe(ibv_send_wr* wqe, int i)
     wqe->num_sge = 1;
     wqe->send_flags = IBV_SEND_SIGNALED;
 
+    wqe->wr.ud.ah = AddressHandle;
+    wqe->wr.ud.remote_qpn = RemoteQpn;
+    wqe->wr.ud.remote_qkey = RemoteQkey;
+
     return 0;
 }
 
@@ -317,7 +268,6 @@ int RdmaUdTransport::updateSendWqe(ibv_send_wr* wqe, void* buffer, size_t buffer
     wqe->sg_list->addr = (uintptr_t)buffer;
     wqe->sg_list->length = bufferlen;
     wqe->sg_list->lkey = bufferMemoryRegion->lkey;
-
     return 0;
 }
 
@@ -390,7 +340,8 @@ int RdmaUdTransport::post_RECEIVE_WQE(ibv_recv_wr* ll_wqe)
 ibv_mr* RdmaUdTransport::create_MEMORY_REGION(void* buffer, size_t bufferlen)
 {
     ibv_mr* tmpmr = (ibv_mr*)malloc(sizeof(ibv_mr));
-    int mr_flags = IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE;
+    //int mr_flags = IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE;
+    int mr_flags = IBV_ACCESS_LOCAL_WRITE;
     tmpmr = ibv_reg_mr(g_pd, buffer, bufferlen, mr_flags);
     if(!tmpmr)
     {
@@ -434,102 +385,77 @@ int RdmaUdTransport::GetCMEvent(rdma_cm_event_type* EventType)
 
 }
 
-int RdmaUdTransport::RDMACreateChannel()
+/*
+ * Create the CM Event Channel, the Connection Identifier, Bind the application to a local address
+ */
+int RdmaUdTransport::RDMACreateContext()
 {
     int ret = 0;
-    g_CMEventChannel = NULL;
+    struct rdma_cm_event *CMEvent;
 
     // Open a Channel to the Communication Manager used to receive async events from the CM.
     g_CMEventChannel = rdma_create_event_channel();
     if(!g_CMEventChannel)
     {
-        fprintf(stderr,"ERROR: Failed to Open CM Event Channel");
-        CleanUpCMContext();
+        fprintf(stderr,"ERROR - RDMACreateContext: Failed to Create CM Event Channel");
+        DestroyContext();
         return -1;
     }
 
-    ret = rdma_create_id(g_CMEventChannel,&g_CMId, NULL, RDMA_PS_TCP);
+    ret = rdma_create_id(g_CMEventChannel, &g_CMId, NULL, RDMA_PS_UDP);
     if(ret != 0)
     {
-        fprintf(stderr,"ERROR: Failed to Create CM ID");
-        CleanUpCMContext();
+        fprintf(stderr,"ERROR - RDMACreateContext: Failed to Create CM ID");
+        DestroyContext();
         return -1;
     }
 
-    return 0;
-}
-
-int RdmaUdTransport::RDMAClientInit()
-{
-    int ret;
-    rdma_cm_event_type et;
-
-    if(get_addr(s_srcAddr.c_str(), (struct sockaddr*)&g_srcAddr) != 0)
+    if(get_addr(s_localAddr.c_str(), (struct sockaddr*)&localAddr_in) != 0)
     {
-        fprintf(stderr,"ERROR: Failed to Resolve Local Address\n");
-        CleanUpCMContext();
+        fprintf(stderr, "ERROR - RDMACreateContext: Failed to Resolve Local Address\n");
+        DestroyContext();
         return -1;
     }
 
-
-    if(get_addr(s_dstAddr.c_str(),(struct sockaddr*)&g_dstAddr) != 0)
+    if(get_addr(s_mcastAddr.c_str(), (struct sockaddr*)&mcastAddr_in) != 0)
     {
-        fprintf(stderr,"ERROR: Failed to Resolve Destination Address\n");
-        CleanUpCMContext();
-        return -1;
-    }
-    g_dstAddr.sin_port = n_dstPort;
-    char str[INET_ADDRSTRLEN];
-    inet_ntop(AF_INET, &(g_dstAddr.sin_addr), str, INET_ADDRSTRLEN);
-    fprintf(stderr,"Processor address(%s) port(%u)\n", str, g_dstAddr.sin_port);
-
-    /*
-     * Resolve the IP Addresses to GIDs.
-     */
-    fprintf(stderr,"DEBUG: Resolving IP addresses to GIDS ...\n");
-    ret = rdma_resolve_addr(g_CMId, (struct sockaddr*)&g_srcAddr, (struct sockaddr*)&g_dstAddr,2000);
-    if(ret != 0)
-    {
-        fprintf(stderr,"ERROR: CM couldn't resolve IP addresses to GIDS\n");
+        fprintf(stderr, "ERROR - RDMACreateContext: Failed to Resolve Multicast Address Address\n");
+        DestroyContext();
         return -1;
     }
 
-    fprintf(stderr,"DEBUG: Waiting for CM to resolve IP Addresses ...\n");
-    do
-    {
-        ret = GetCMEvent(&et);
-        if(ret != 0)
-        {
-            fprintf(stderr,"ERROR: Failed processing CM Events\n");
-        }
-    } while(et != RDMA_CM_EVENT_ADDR_RESOLVED);
-
-    return 0;
-}
-
-int RdmaUdTransport::RDMAServerInit()
-{
-    int ret;
-
-    if(get_addr(s_srcAddr.c_str(),(struct sockaddr*)&g_srcAddr) != 0)
-    {
-        fprintf(stderr, "ERROR: Failed to Resolve Local Address\n");
-        CleanUpCMContext();
-        return -1;
-    }
-    g_srcAddr.sin_port = n_srcPort;
-
-    ret = rdma_bind_addr(g_CMId, (struct sockaddr*)&g_srcAddr);
+    ret = rdma_bind_addr(g_CMId, (struct sockaddr*)&localAddr_in);
     if(ret != 0 )
     {
-        fprintf(stderr, "ERROR: RDMAServerInit - Couldn't bind to local address\n");
+        fprintf(stderr, "ERROR - RDMACreateContext: Couldn't bind to local address\n");
+        fprintf(stderr, "ERROR - errno %s\n", strerror(errno));
+        return -1;
     }
 
-    rdma_listen(g_CMId, 10);
+    ret = rdma_resolve_addr(g_CMId,
+                            (struct sockaddr*)&localAddr_in,
+                            (struct sockaddr*)&mcastAddr_in,
+                            2000);
+    if(ret != 0 )
+    {
+        fprintf(stderr, "ERROR - RDMACreateContext: Couldn't resolve local address and or mcast address.\n");
+        fprintf(stderr, "ERROR - errno %s\n", strerror(errno));
+        return -1;
+    }
 
-    uint16_t port = 0;
-    port = rdma_get_src_port(g_CMId);
-    fprintf(stderr, "DEBUG: Listening on port %d.\n", port);
+    ret = rdma_get_cm_event(g_CMEventChannel, &CMEvent);
+    if(ret != 0)
+    {
+        fprintf(stderr, "ERROR - RDMACreateContext: No Event Received Time Out\n");
+        return -1;
+    }
+    if(CMEvent->event != RDMA_CM_EVENT_ADDR_RESOLVED)
+    {
+        fprintf(stderr, "ERROR - RDMACreateContext: Expected Multicast Joint Event\n");
+        return -1;
+    }
+
+
     return 0;
 }
 
@@ -538,27 +464,33 @@ int RdmaUdTransport::RDMACreateQP()
     int ret;
     struct ibv_qp_init_attr qp_init_attr;
 
+    //g_CMId->qp_type = IBV_QPT_UD;
+    //g_CMId->ps = RDMA_PS_UDP;
+
     //Create a Protection Domain
     g_pd = ibv_alloc_pd(g_CMId->verbs);
     if(!g_pd)
     {
         fprintf(stderr,"ERROR: - RDMACreateQP: Couldn't allocate protection domain\n");
+        fprintf(stderr, "ERROR - errno %s\n", strerror(errno));
         return -1;
     }
 
     /*Create a completion Queue */
-    g_cq = ibv_create_cq(g_CMId->verbs, NUM_OPERATIONS, NULL, NULL, 0);
+    //g_cq = ibv_create_cq(g_CMId->verbs, NUM_OPERATIONS, NULL, NULL, 0);
+    g_cq = ibv_create_cq(g_CMId->verbs, 5, NULL, NULL, 1);
     if(!g_cq)
     {
         fprintf(stderr, "ERROR: RDMACreateQP - Couldn't create completion queue\n");
+        fprintf(stderr, "ERROR - errno %s\n", strerror(errno));
         return -1;
     }
 
     /* create the Queue Pair */
     memset(&qp_init_attr, 0, sizeof(qp_init_attr));
 
-    qp_init_attr.qp_type = IBV_QPT_RC;
-    qp_init_attr.sq_sig_all = 0;
+    qp_init_attr.qp_type = IBV_QPT_UD;
+    //qp_init_attr.sq_sig_all = 0;
     qp_init_attr.send_cq = g_cq;
     qp_init_attr.recv_cq = g_cq;
     qp_init_attr.cap.max_send_wr = NUM_OPERATIONS;
@@ -566,13 +498,58 @@ int RdmaUdTransport::RDMACreateQP()
     qp_init_attr.cap.max_send_sge = 1;
     qp_init_attr.cap.max_recv_sge = 1;
 
-
     ret = rdma_create_qp(g_CMId, g_pd, &qp_init_attr);
     if(ret != 0)
     {
-        fprintf(stderr, "ERROR: RDMACreateQP: Couldn't Create Queue Pair Error(%d)\n", errno);
+        fprintf(stderr, "ERROR: RDMACreateQP: Couldn't Create Queue Pair Error\n");
+        fprintf(stderr, "ERROR - errno %s\n", strerror(errno));
         return -1;
     }
+    return 0;
+}
+
+int RdmaUdTransport::RdmaMcastConnect()
+{
+    int ret = 0;
+    struct rdma_cm_event *CMEvent;
+
+    ret = rdma_join_multicast(g_CMId, (struct sockaddr*)&mcastAddr_in, NULL);
+    if(ret)
+    {
+        fprintf(stderr, "RDMA multicast join Failed\n");
+        fprintf(stderr, "ERROR - errno %s\n", strerror(errno));
+        return -1;
+    }
+
+    ret = rdma_get_cm_event(g_CMEventChannel, &CMEvent);
+    if(ret != 0)
+    {
+        fprintf(stderr, "ERROR: No Event Received Time Out\n");
+        fprintf(stderr, "ERROR - errno %s\n", strerror(errno));
+        return -1;
+    }
+    if(CMEvent->event == RDMA_CM_EVENT_MULTICAST_JOIN)
+    {
+        rdma_ud_param *param;
+        param = &CMEvent->param.ud;
+
+        RemoteQpn = param->qp_num;
+        RemoteQkey = param->qkey;
+        AddressHandle = ibv_create_ah(g_pd, &param->ah_attr);
+        if (!AddressHandle)
+        {
+            fprintf(stderr, "ERROR OnMulticastJoin - Failed to create the Address Handle\n");
+            return -1;
+        }
+        fprintf(stderr, "Joined Multicast Group QPN(%d) QKey(%d)\n", RemoteQpn, RemoteQkey);
+    } else {
+
+        fprintf(stderr, "Expected Multicast Joint Event\n");
+        return -1;
+    }
+
+
+
     return 0;
 }
 
@@ -697,7 +674,7 @@ int RdmaUdTransport::RDMAServerConnect()
     return 0;
 }
 
-void RdmaUdTransport::CleanUpCMContext()
+void RdmaUdTransport::DestroyContext()
 {
     if(g_CMEventChannel != NULL)
     {
@@ -708,18 +685,18 @@ void RdmaUdTransport::CleanUpCMContext()
     {
         if(rdma_destroy_id(g_CMId) != 0)
         {
-            fprintf(stderr, "ERROR: CleanUpCMContext - Failed to destroy Connection Manager Id\n");
+            fprintf(stderr, "ERROR: DestroyContext - Failed to destroy Connection Manager Id\n");
         }
     }
 }
 
-void RdmaUdTransport::CleanUpQPContext()
+void RdmaUdTransport::DestroyQP()
 {
     if(g_pd != NULL)
     {
         if(ibv_dealloc_pd(g_pd) != 0)
         {
-            fprintf(stderr, "ERROR: CleanUpQPContext - Failed to destroy Protection Domain\n");
+            fprintf(stderr, "ERROR: DestroyQP - Failed to destroy Protection Domain\n");
         }
     }
 
@@ -727,7 +704,7 @@ void RdmaUdTransport::CleanUpQPContext()
     {
         ibv_destroy_cq(g_cq);
         {
-            fprintf(stderr, "ERROR: CleanUpQPContext - Failed to destroy Completion Queue\n");
+            fprintf(stderr, "ERROR: DestroyQP - Failed to destroy Completion Queue\n");
         }
     }
 
