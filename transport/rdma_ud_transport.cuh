@@ -19,8 +19,6 @@
 
 #define NUM_OPERATIONS  MSG_BLOCK_SIZE //Set this to same as the block size for other transports.
 
-enum class eTransportRole {SENSOR, PROCESSOR};
-
 class RdmaUdTransport: public ITransport {
 
 public:

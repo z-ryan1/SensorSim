@@ -78,9 +78,9 @@ int main(int argc,char *argv[], char *envp[]) {
 
     //Create the Transport
     ITransport* t;
-    //if(tmode == "UDP")
-        //t = new UpdTransport(srcAddr, dstPort, dstAddr, dstPort);
-    //else if(tmode == "RDMA-UD")
+    if(tmode == "UDP")
+        t = new UpdTransport(srcAddr, mcastAddr, eTransportRole::SENSOR);
+    else if(tmode == "RDMA-UD")
         t = new RdmaUdTransport(srcAddr, mcastAddr, eTransportRole::SENSOR);
 
     //Create the Sensor

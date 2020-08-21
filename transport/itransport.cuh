@@ -9,6 +9,7 @@
 
 enum class eTransportDest {HOST, DEVICE};
 enum class eTransportType {UDP, RDMA_UD};
+enum class eTransportRole {SENSOR, PROCESSOR};
 
 class ITransport {
 
@@ -25,20 +26,22 @@ public:
 
     string printType() {
         if(transportType == eTransportType::UDP)
-            return "UDP";
+            return "UDP Multicast";
+        else if(transportType == eTransportType::RDMA_UD)
+            return "RDMA Unreliable Datagram (UD) Multicast";
         else
-            return "RDMA-UD";
+            return "transport unknown";
     }
 
 protected:
     //All Transports will use basic IPoX as a control plane to establish a connection.
     string                      s_mcastAddr;
-    int 						n_dstPort;
+    int                         n_mcastPort;
     string                      s_localAddr;
-    int 						n_localPort;
+    int                         n_localPort;
     struct sockaddr_in			g_localAddr;
     struct sockaddr_in			g_mcastAddr;
-    int sockfd;
+    int                         sockfd;
 
     eTransportType              transportType;
 };

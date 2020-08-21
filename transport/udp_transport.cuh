@@ -18,11 +18,13 @@ using namespace std;
 class UpdTransport: public ITransport {
 
 public:
-    UpdTransport(string srcAddr, int srcPort, string dstAddr, int dstPort);
+    UpdTransport(string localAddr, string mcastAddr, eTransportRole role);
 
 private:
     int push(Message* msg);
     int pop(Message msg[MSG_BLOCK_SIZE], int numReqMsg, int& numRetMsg, eTransportDest dest);
+
+    struct ip_mreq        mcastGroup;
 };
 
 
