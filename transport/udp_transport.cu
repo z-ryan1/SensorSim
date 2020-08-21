@@ -6,55 +6,55 @@
 #include <arpa/inet.h>
 #include <iostream>
 
-#include "UDPTransport.cuh"
+#include "udp_transport.cuh"
 
-UDPTransport::UDPTransport(string srcAddr, int srcPort, string dstAddr, int dstPort) {
+UpdTransport::UpdTransport(string srcAddr, int srcPort, string dstAddr, int dstPort) {
 
-    s_srcAddr = srcAddr;
-    n_srcPort = srcPort;
+    s_localAddr = srcAddr;
+    n_localPort = srcPort;
     s_dstAddr = dstAddr;
     n_dstPort = dstPort;
 
     // Creating socket file descriptor
-   cout << "Creating local UDP socket: " << s_srcAddr << endl;
+   cout << "Creating local UDP socket: " << s_localAddr << endl;
     if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
         perror("socket creation failed");
         exit(EXIT_FAILURE);
     }
 
     //Create the SockAddr for the Local System
-    memset(&this->g_srcAddr, 0, sizeof(this->g_srcAddr));
-    this->g_srcAddr.sin_family = AF_INET;
-    this->g_srcAddr.sin_port = htons(n_srcPort);
-    if(s_srcAddr.empty())
+    memset(&this->g_localAddr, 0, sizeof(this->g_localAddr));
+    this->g_localAddr.sin_family = AF_INET;
+    this->g_localAddr.sin_port = htons(n_localPort);
+    if(s_localAddr.empty())
     {
-        this->g_srcAddr.sin_addr.s_addr = INADDR_ANY;
+        this->g_localAddr.sin_addr.s_addr = INADDR_ANY;
     }
     else
     {
-        inet_pton(AF_INET, s_srcAddr.c_str(), &this->g_srcAddr.sin_addr);
+        inet_pton(AF_INET, s_localAddr.c_str(), &this->g_localAddr.sin_addr);
     }
 
-    memset(&this->g_dstAddr, 0, sizeof(this->g_dstAddr));
-    this->g_dstAddr.sin_family = AF_INET;
-    this->g_dstAddr.sin_port = htons(n_dstPort);
-    inet_pton(AF_INET, s_dstAddr.c_str(), &this->g_dstAddr.sin_addr);
+    memset(&this->g_mcastAddr, 0, sizeof(this->g_mcastAddr));
+    this->g_mcastAddr.sin_family = AF_INET;
+    this->g_mcastAddr.sin_port = htons(n_dstPort);
+    inet_pton(AF_INET, s_dstAddr.c_str(), &this->g_mcastAddr.sin_addr);
 
     // Bind the socket with the server address
-    cout << "Bind the socket local address: " << s_srcAddr << endl;
-    if (bind(sockfd, (const struct sockaddr *) &this->g_srcAddr,
-             sizeof(this->g_srcAddr)) < 0) {
+    cout << "Bind the socket local address: " << s_localAddr << endl;
+    if (bind(sockfd, (const struct sockaddr *) &this->g_localAddr,
+             sizeof(this->g_localAddr)) < 0) {
         perror("bind failed");
         exit(EXIT_FAILURE);
     }
 
 }
 
-int UDPTransport::push(Message* m)
+int UpdTransport::push(Message* m)
 {
     sendto(this->sockfd, (const char *)m->buffer, m->bufferSize,
-           MSG_CONFIRM, (const struct sockaddr *) &this->g_dstAddr, sizeof(this->g_dstAddr));
-    DEBUG("To " << inet_ntoa(g_dstAddr.sin_addr) << endl);
+           MSG_CONFIRM, (const struct sockaddr *) &this->g_mcastAddr, sizeof(this->g_mcastAddr));
+    DEBUG("To " << inet_ntoa(g_mcastAddr.sin_addr) << endl);
     DEBUG("Sent a Msg: " << *m << endl);
     //m->printBuffer(32);
 
@@ -64,18 +64,18 @@ int UDPTransport::push(Message* m)
 /*
 *  Pulls a message from the transport and places it in the buffer
 */
-int UDPTransport::pop(Message* m, int numReqMsg, int& numRetMsg, eTransportDest dest)
+int UpdTransport::pop(Message* m, int numReqMsg, int& numRetMsg, eTransportDest dest)
 {
-    uint8_t buffer[MAX_MESSAGE_SIZE];    // receive buffer
+    uint8_t buffer[MSG_MAX_SIZE];    // receive buffer
     int recvlen;                         // num bytes received
     struct sockaddr_in from;             // Sender's address. TODO: Don't need these, just waste perf
     int fromlen;                         // Length of sender's address.
 
-    DEBUG("waiting on port " << this->n_srcPort << endl);
+    DEBUG("waiting on port " << this->n_localPort << endl);
 
     for(int i = 0; i < numReqMsg; i++)
     {
-        recvlen = recvfrom(this->sockfd, buffer, MAX_MESSAGE_SIZE, MSG_DONTWAIT, reinterpret_cast<sockaddr *>(&from),
+        recvlen = recvfrom(this->sockfd, buffer, MSG_MAX_SIZE, MSG_DONTWAIT, reinterpret_cast<sockaddr *>(&from),
                            reinterpret_cast<socklen_t *>(&fromlen));
 
         if (recvlen > 0) {

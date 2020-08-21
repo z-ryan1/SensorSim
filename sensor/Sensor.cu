@@ -4,7 +4,7 @@
 
 #include "Sensor.cuh"
 
-Sensor::Sensor(iTransport* t) {
+Sensor::Sensor(ITransport* t) {
     transport = t;
 }
 
@@ -82,9 +82,15 @@ int Sensor::getFlowLength() {
     return flow.size();
 }
 
-void Sensor::sendFlow() {
+int Sensor::sendFlow() {
     for(int i = 0; i < flow.size() ; i++)
-        transport->push(flow[i]);
+    {
+        if(0 != transport->push(flow[i]))
+        {
+            return -1;
+        }
+    }
+    return 0;
 }
 
 

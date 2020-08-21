@@ -48,7 +48,7 @@ void cpu_count_zeros(Message* flow, int& sum, int flowLength)
 }
 
 
-Processor::Processor(iTransport* t) {
+Processor::Processor(ITransport* t) {
     transport = t;
 }
 
@@ -92,6 +92,7 @@ void Processor::procCountZerosGPU(int minMessageToProcess) {
 
         if(msgCountReturned > 0) //If there are new messages process them
         {
+            cerr << "\rProcessed " << processedMessages << " messages";
             gpu_count_zeros <<< threadsPerBlock, numberOfBlocks >>>(m, blockSum, msgCountReturned);
 
             checkCuda( cudaGetLastError() );
@@ -116,7 +117,7 @@ void Processor::procCountZerosGPU(int minMessageToProcess) {
     checkCuda( cudaFree(m));
     checkCuda( cudaFree(blockSum));
 
-    cout << "Processing Completed: " << endl;
+    cout << "\n Processing Completed: " << endl;
     cout << "\t processed " << processedMessages << " in " << timeToProcess.count() << " sec" << endl;
     cout << "\t total zero's in messages = " << sum << endl;
     exit(EXIT_SUCCESS);
@@ -140,6 +141,7 @@ int Processor::procCountZerosCPU(int minMessageToProcess) {
 
         if(msgCountReturned > 0) //If there are new messages process them
         {
+            //cerr << "\rProcessed " << processedMessages << " messages";
             cpu_count_zeros(m, sum, msgCountReturned);
             processedMessages += msgCountReturned;
         }
@@ -148,7 +150,7 @@ int Processor::procCountZerosCPU(int minMessageToProcess) {
     }
     timeToProcess = chrono::system_clock::now() - start;
 
-    cout << "Processing Completed: " << endl;
+    cout << "\nProcessing Completed: " << endl;
     cout << "\t processed " << processedMessages << " in " << timeToProcess.count() << " sec" << endl;
     cout << "\t total zero's in messages = " << sum << endl;
     exit(EXIT_SUCCESS);
@@ -156,23 +158,30 @@ int Processor::procCountZerosCPU(int minMessageToProcess) {
 
 int Processor::procPrintMessages(int minMessageToProcess) {
     Message m[MSG_BLOCK_SIZE];
+    int processedCount = 0;
     int r = 0;
 
-    while (r < minMessageToProcess) {
+    do {
+
         if (0 != transport->pop(m, MSG_BLOCK_SIZE, r, eTransportDest::HOST)) {
             exit(EXIT_FAILURE);
         }
-    }
+
+        processedCount += r;
+
+        cout << "Printing first bytes of " << min(r,minMessageToProcess) << " messages" << endl;
+        for(int i = 0; i<min(r,minMessageToProcess); i++)
+        {
+            m[i].printBuffer(32);
+            cout << endl;
+        }
+    } while (processedCount < minMessageToProcess);
 
     //Simple process (i.e. print)
-    cout << "Processing Completed: found " << r << " messages" << endl;
-    cout << "Printing first bytes of " << min(r,minMessageToProcess) << " messages" << endl;
+    cout << "Processing Completed: found " << processedCount << " messages" << endl;
 
-    for(int i = 0; i<min(r,minMessageToProcess); i++)
-    {
-        m[i].printBuffer(32);
-        cout << endl;
-    }
+
+
 
     exit(EXIT_SUCCESS);
 }
