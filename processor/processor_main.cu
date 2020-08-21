@@ -85,9 +85,9 @@ int main(int argc,char *argv[], char *envp[]) {
 
     //Create the Transport
     ITransport* t;
-    //if(tmode == "UDP")
-        //t = new UpdTransport(localAddr, dstPort, mcastAddr, dstPort);
-    //else if(tmode == "RDMA-UD")
+    if(tmode == "UDP")
+        t = new UpdTransport(localAddr, mcastAddr, eTransportRole::PROCESSOR);
+    else if(tmode == "RDMA-UD")
         t = new RdmaUdTransport(localAddr , mcastAddr, eTransportRole::PROCESSOR);
 
     Processor p = Processor(t);

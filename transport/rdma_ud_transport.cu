@@ -72,7 +72,6 @@ void PrintConnectionInfo(rdma_conn_param cParam)
 
 RdmaUdTransport::RdmaUdTransport(string localAddr, string mcastAddr, eTransportRole role) {
 
-    ibv_wc wc;
     s_localAddr = localAddr;
     s_mcastAddr = mcastAddr;
 
@@ -131,7 +130,7 @@ RdmaUdTransport::~RdmaUdTransport() {
     DestroyContext();
     DestroyQP();
 
-    //REmove the Shared MEmory
+    //Remove the Shared MEmory
     delete mr_controlBuffer;
 }
 

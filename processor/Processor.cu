@@ -141,7 +141,7 @@ int Processor::procCountZerosCPU(int minMessageToProcess) {
 
         if(msgCountReturned > 0) //If there are new messages process them
         {
-            //cerr << "\rProcessed " << processedMessages << " messages";
+            cerr << "\rProcessed " << processedMessages << " messages";
             cpu_count_zeros(m, sum, msgCountReturned);
             processedMessages += msgCountReturned;
         }
