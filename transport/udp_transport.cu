@@ -148,3 +148,12 @@ int UpdTransport::pop(Message* m, int numReqMsg, int& numRetMsg, eTransportDest 
     return 0;
 }
 
+u_int8_t* UpdTransport::getMessageBuff() {
+    u_int8_t* buffer = static_cast<u_int8_t *>(malloc(MSG_MAX_SIZE * sizeof(uint8_t)));
+    return buffer;
+}
+
+void UpdTransport::freeMessageBuff(Message* m)
+{
+    free(m->buffer);
+}

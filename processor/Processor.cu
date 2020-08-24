@@ -73,8 +73,11 @@ void Processor::procCountZerosGPU(int minMessageToProcess) {
     int sum =0;
 
     Message* m;//Create array that is max message block size
+    uint8_t * d; //The data we will store.
     size_t msgBlockSize = MSG_BLOCK_SIZE * sizeof(Message);
+    size_t msgDataSize = MSG_MAX_SIZE * MSG_BLOCK_SIZE;
     checkCuda( cudaMallocManaged(&m, msgBlockSize));
+    checkCuda( cudaMallocManaged(&d, msgDataSize));
 
     int* blockSum;   //Array with sum of zeros for this message
     size_t sumArraySize = MSG_BLOCK_SIZE * sizeof(int);
@@ -152,6 +155,35 @@ int Processor::procCountZerosCPU(int minMessageToProcess) {
 
     cout << "\nProcessing Completed: " << endl;
     cout << "\t processed " << processedMessages << " in " << timeToProcess.count() << " sec" << endl;
+    cout << "\t total zero's in messages = " << sum << endl;
+    exit(EXIT_SUCCESS);
+}
+
+void Processor::procDropMsg(int minMessageToProcess) {
+    timer t;
+
+    Message m[MSG_BLOCK_SIZE];
+    int msgCountReturned = 0;
+    int sum = 0;
+    int processedMessages = 0;
+
+    while (processedMessages < minMessageToProcess) {
+
+        if (0 != transport->pop(m, MSG_BLOCK_SIZE, msgCountReturned, eTransportDest::HOST)) {
+            exit(EXIT_FAILURE);
+        }
+
+        if(msgCountReturned > 0) //If there are new messages process them
+        {
+            //cerr << "\rProcessed " << processedMessages << " messages";
+            processedMessages += msgCountReturned;
+        }
+        msgCountReturned=0;
+
+    }
+
+    cout << "\nProcessing Completed: " << endl;
+    cout << "\t processed " << processedMessages << " in " << t.seconds_elapsed() << " sec" << endl;
     cout << "\t total zero's in messages = " << sum << endl;
     exit(EXIT_SUCCESS);
 }

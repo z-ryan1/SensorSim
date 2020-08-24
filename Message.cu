@@ -12,15 +12,15 @@ Message::Message() {
     this->bufferSize = 0;
 }
 
-Message::Message(int seqNumber, int interval, int bufferSize, uint8_t *buf) {
+Message::Message(int seqNumber, int interval, int bufferSize, uint8_t* buf) {
     this->seqNumber = seqNumber;
     this->interval = interval;
     this->bufferSize = bufferSize;
-    memcpy(buffer, buf, bufferSize); //TODO: This will do a memory copy makes sense for receive?
+    this->buffer = buf;
 }
 
 Message::~Message() {
-
+    //Need to call the transport to destroy it.
 }
 
 

@@ -28,6 +28,8 @@ public:
 private:
     int push(Message* msg);
     int pop(Message msg[MSG_BLOCK_SIZE], int numReqMsg, int& numRetMsg, eTransportDest dest);
+    u_int8_t* getMessageBuff();
+    void freeMessageBuff(Message* m);
 
     struct rdma_event_channel	*g_CMEventChannel;
     struct rdma_cm_id			*g_CMId;
@@ -45,25 +47,27 @@ private:
     uint32_t 				RemoteQkey;
 
     //Shared Memory Regions
-    uint8_t                 controlBuffer[MSG_MAX_SIZE];            //Control Messages - Receiver notify sender avail
+    /*uint8_t                 controlBuffer[MSG_MAX_SIZE];            //Control Messages - Receiver notify sender avail
     ibv_send_wr             controlSendWqe;
     ibv_recv_wr             controlRcvWqe;
     ibv_wc                  controlWc;
-    ibv_mr*                 mr_controlBuffer;
+    ibv_mr*                 mr_controlBuffer;*/
 
 
     uint8_t                 dataBuffer[MSG_MAX_SIZE];             //Data Path
+    ibv_mr*                 mr_dataBuffer;
+
+
+
+    uint8_t                 messagePool[MSG_BLOCK_SIZE * MSG_MAX_SIZE];
+    // TODO: this count be a vector to make iter easier
+    bool                    messagePoolSlotFree[MSG_BLOCK_SIZE];  //Track which slots in the message pool is available.
+    ibv_mr*                 mr_messagePool;
+
     ibv_send_wr             dataSendWqe;
     ibv_recv_wr             dataRcvWqe;
     ibv_wc                  dataWc;
-    ibv_mr*                 mr_dataBuffer;
 
-    /*
-    uint8_t                 rcvBuffer[MSG_BLOCK_SIZE * MSG_MAX_SIZE]; //Used by Processor
-    ibv_mr*                 mr_rcvBuffer;
-    ibv_wc                  rcvCQEs[MSG_BLOCK_SIZE];
-    std::vector<ibv_recv_wr> rcvWQEs;
-     */
 
     int PollCQ(ibv_wc* wc);
 

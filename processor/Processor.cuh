@@ -27,6 +27,8 @@ public:
 
     void procCountZerosGPU(int i);
 
+    void procDropMsg(int i);
+
 private:
     ITransport *transport;
 

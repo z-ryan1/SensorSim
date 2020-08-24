@@ -40,6 +40,10 @@ int Sensor::createPCAPFlow(string fileName)
         //deltaSec = (header->ts.tv_sec) - lastMsgSec; //TODO: Calculating Message interval factor in > 1 Second delays
         deltaUSec = (header->ts.tv_usec) - lastMsgUsec;
 
+        uint8_t* buffer;
+       buffer = transport->getMessageBuff();
+        memcpy(buffer, data, header->caplen);
+
         m = new Message(i++, deltaUSec, header->caplen, (uint8_t*)data); //Cast from uchar
         cout << "Adding to flow: " << *m << endl;
 
@@ -54,12 +58,11 @@ int Sensor::createRandomFlow(int msgLength, int numMsg) {
     for(int i=0; i<numMsg; ++i)
     {
         //Create Random Message
-        auto* buffer = new uint8_t[msgLength];
+        uint8_t * buffer = transport->getMessageBuff();
         for(int j = 0; j < msgLength; ++j)
         {
             int r = (uint8_t)((rand()%256)+1);
             buffer[j]= r;
-
         }
         Message* m = new Message(i, 100, msgLength, buffer);
         flow.push_back(m);

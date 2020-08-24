@@ -23,8 +23,11 @@ public:
 private:
     int push(Message* msg);
     int pop(Message msg[MSG_BLOCK_SIZE], int numReqMsg, int& numRetMsg, eTransportDest dest);
+    u_int8_t* getMessageBuff();
+    void freeMessageBuff(Message* m);
 
     struct ip_mreq        mcastGroup;
+
 };
 
 
