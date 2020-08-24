@@ -18,6 +18,8 @@ public:
 
     virtual int push(Message* msg) = 0;
     virtual int pop(Message msg[MSG_BLOCK_SIZE], int numReqMsg, int& numRetMsg, eTransportDest dest ) = 0;
+    virtual u_int8_t* getMessageBuff() = 0;
+    virtual void freeMessageBuff(Message* msg) = 0;
 
     eTransportType getType()
     {

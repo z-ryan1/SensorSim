@@ -17,7 +17,7 @@ void PrintUsage()
 {
     cout << "usage: processorSim [ -s pcap ] [-m mode] mcast-addr" << endl;
     cout << "\t multicast group where sensor publishes data" << endl;
-    cout << "\t[-m mode] - run mode: PRINT, CPU-COUNT, GPU-COUNT (default: PRINT)" << endl;
+    cout << "\t[-m mode] - run mode: PRINT, NO-PROC, CPU-COUNT, GPU-COUNT (default: PRINT)" << endl;
     cout << "\t[-t mode] - transport to use: UDP, RDMA-UD, UCX (default: UDP)" << endl;
     cout << "\t[-l local-addr] - local ipv4 addresss to bind. (default: bind to first address)" << endl;
 }
@@ -41,7 +41,7 @@ int main(int argc,char *argv[], char *envp[]) {
                 break;
             case 'm':
                 mode = optarg;
-                if (mode != "PRINT" && mode != "CPU-COUNT" && mode != "GPU-COUNT")
+                if (mode != "PRINT" && mode != "NO-PROC" && mode != "CPU-COUNT" && mode != "GPU-COUNT")
                 {
                     PrintUsage();
                     return -1;
@@ -96,6 +96,11 @@ int main(int argc,char *argv[], char *envp[]) {
     {
         cout << "This processor will print " << MIN_MSG_TO_PRINT << " msg then exit" << endl;
         p.procPrintMessages(MIN_MSG_TO_PRINT);
+    }
+    else if(mode == "NO-PROC")
+    {
+        cout << "This processor will receive " << MIN_MSG_TO_PROCESS << " msg it does no processing" << endl;
+        p.procDropMsg(MIN_MSG_TO_PROCESS);
     }
     else if(mode == "CPU-COUNT")
     {

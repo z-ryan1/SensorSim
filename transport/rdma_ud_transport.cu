@@ -115,13 +115,22 @@ RdmaUdTransport::RdmaUdTransport(string localAddr, string mcastAddr, eTransportR
     initRecvWqe(&dataRcvWqe, 0);
     updateRecvWqe(&dataRcvWqe, &dataBuffer, MSG_MAX_SIZE, mr_dataBuffer);
 
+    //Initialize the Message Buffer Pool
+    mr_messagePool = create_MEMORY_REGION(&messagePool, (sizeof(uint8_t ) * MSG_MAX_SIZE * MSG_BLOCK_SIZE));
+    for(int i = 0; i < MSG_BLOCK_SIZE; i++)
+    {
+        messagePoolSlotFree[i] = true;
+    }
+
+    initSendWqe(&dataSendWqe, 42);
+
     //Register the control plane memory region
-    mr_controlBuffer = create_MEMORY_REGION(&controlBuffer, MSG_MAX_SIZE);
+    /*mr_controlBuffer = create_MEMORY_REGION(&controlBuffer, MSG_MAX_SIZE);
     memset(controlBuffer, 0x00, MSG_MAX_SIZE);
     initSendWqe(&controlSendWqe, 0);
     updateSendWqe(&controlSendWqe, &controlBuffer, MSG_MAX_SIZE, mr_controlBuffer);
     initRecvWqe(&controlRcvWqe, 0);
-    updateRecvWqe(&controlRcvWqe, &controlBuffer, MSG_MAX_SIZE, mr_controlBuffer);
+    updateRecvWqe(&controlRcvWqe, &controlBuffer, MSG_MAX_SIZE, mr_controlBuffer);*/
 
 }
 
@@ -130,8 +139,7 @@ RdmaUdTransport::~RdmaUdTransport() {
     DestroyContext();
     DestroyQP();
 
-    //Remove the Shared MEmory
-    delete mr_controlBuffer;
+    ibv_dereg_mr(mr_messagePool);
 }
 
 int RdmaUdTransport::push(Message* m)
@@ -139,12 +147,12 @@ int RdmaUdTransport::push(Message* m)
     //usleep(200); //TODO: Take this out
     //cerr << "NO PUSH OP" << endl;
 
-    ibv_mr* mr_msg = create_MEMORY_REGION(&m->buffer, m->bufferSize);
+    //ibv_mr* mr_msg = create_MEMORY_REGION(&m->buffer, m->bufferSize);
 
-    initSendWqe(&dataSendWqe, 42);
-    updateSendWqe(&dataSendWqe, &(m->buffer), m->bufferSize, mr_msg);
+    //initSendWqe(&dataSendWqe, 42);
+    updateSendWqe(&dataSendWqe, m->buffer, m->bufferSize, mr_messagePool);
 
-      post_SEND_WQE(&dataSendWqe);
+    post_SEND_WQE(&dataSendWqe);
 
        DEBUG("DEBUG: Sent Message:\n");
       #ifdef DEBUG_BUILD
@@ -165,17 +173,17 @@ int RdmaUdTransport::push(Message* m)
       {
           usleep(50); //wait 50 us and we will try again.
           cerr << "DEBUG: WRID(" << dataWc.wr_id << ")\tStatus(IBV_WC_RNR_RETRY_EXC_ERR)" << endl;
-          ibv_dereg_mr(mr_msg);
+          //ibv_dereg_mr(mr_msg);
           return -1;
       }
       if(dataWc.status != IBV_WC_SUCCESS)
       {
           cerr << "DEBUG: WRID(" << dataWc.wr_id << ")\tStatus(" << dataWc.status << ")" << endl;
-          ibv_dereg_mr(mr_msg);
+          //ibv_dereg_mr(mr_msg);
           return -1;
       }
 
-    ibv_dereg_mr(mr_msg);
+    //ibv_dereg_mr(mr_msg);
 
 
 
@@ -210,7 +218,9 @@ int RdmaUdTransport::pop(Message* m, int numReqMsg, int& numRetMsg, eTransportDe
                                  ")\tSize(" << dataWc.byte_len << ")\n");
         }
 
-        m[numRetMsg-1] = Message(numRetMsg-1, 0, dataWc.byte_len, dataBuffer); //we can reuse the buffer now.
+        uint8_t* mbuff = this->getMessageBuff();
+        memcpy(mbuff, dataBuffer,dataWc.byte_len);
+        m[numRetMsg-1] = Message(numRetMsg-1, 0, dataWc.byte_len, mbuff); //we can reuse the buffer now.
         //TODO: Choose to create message buffer in GPU vs CPU Memory.
 
         DEBUG ("DEBUG: Received Message:\n");
@@ -710,5 +720,25 @@ void RdmaUdTransport::DestroyQP()
     rdma_destroy_qp(g_CMId);
 
 }
+
+
+u_int8_t * RdmaUdTransport::getMessageBuff() {
+    for(int i = 0; i < MSG_BLOCK_SIZE; i++)
+    {
+        if(messagePoolSlotFree[i])
+        {
+            return &messagePool[i * MSG_BLOCK_SIZE];
+        }
+    }
+
+    return NULL; //We went thorugh the whole Memory Pool and didn't find an open slot.
+}
+
+
+void RdmaUdTransport::freeMessageBuff(Message* m)
+{
+    //TODO: need to find and free this slot in the memory pool.
+}
+
 
 
