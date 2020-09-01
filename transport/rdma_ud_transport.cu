@@ -70,7 +70,7 @@ void PrintConnectionInfo(rdma_conn_param cParam)
     fprintf(stderr, "DEBUG: QPN(%d)\n", cParam.qp_num);
 }
 
-RdmaUdTransport::RdmaUdTransport(string localAddr, string mcastAddr, eTransportRole role) {
+RdmaUdTransport::RdmaUdTransport(std::string localAddr, std::string mcastAddr, eTransportRole role) {
 
     s_localAddr = localAddr;
     s_mcastAddr = mcastAddr;
@@ -78,7 +78,7 @@ RdmaUdTransport::RdmaUdTransport(string localAddr, string mcastAddr, eTransportR
     // Creating socket file descriptor
     if(RDMACreateContext() != 0)
     {
-        cerr << "Failed Create the RDMA Channel." << endl;
+        std::cerr << "Failed Create the RDMA Channel." << std::endl;
         exit(EXIT_FAILURE);
     }
 
@@ -110,27 +110,17 @@ RdmaUdTransport::RdmaUdTransport(string localAddr, string mcastAddr, eTransportR
     //Initialize the Data Channel
     mr_dataBuffer = create_MEMORY_REGION(&dataBuffer, MSG_MAX_SIZE);
     memset(dataBuffer, 0x00, MSG_MAX_SIZE);
-    initSendWqe(&dataSendWqe, 0);
+    initSendWqe(&dataSendWqe, 42);
     updateSendWqe(&dataSendWqe, &dataBuffer, MSG_MAX_SIZE, mr_dataBuffer);
-    initRecvWqe(&dataRcvWqe, 0);
+    initRecvWqe(&dataRcvWqe, 99);
     updateRecvWqe(&dataRcvWqe, &dataBuffer, MSG_MAX_SIZE, mr_dataBuffer);
 
     //Initialize the Message Buffer Pool
-    mr_messagePool = create_MEMORY_REGION(&messagePool, (sizeof(uint8_t ) * MSG_MAX_SIZE * MSG_BLOCK_SIZE));
+    mr_messagePool = create_MEMORY_REGION(&messagePool, (sizeof(Message) * MSG_BLOCK_SIZE));
     for(int i = 0; i < MSG_BLOCK_SIZE; i++)
     {
         messagePoolSlotFree[i] = true;
     }
-
-    initSendWqe(&dataSendWqe, 42);
-
-    //Register the control plane memory region
-    /*mr_controlBuffer = create_MEMORY_REGION(&controlBuffer, MSG_MAX_SIZE);
-    memset(controlBuffer, 0x00, MSG_MAX_SIZE);
-    initSendWqe(&controlSendWqe, 0);
-    updateSendWqe(&controlSendWqe, &controlBuffer, MSG_MAX_SIZE, mr_controlBuffer);
-    initRecvWqe(&controlRcvWqe, 0);
-    updateRecvWqe(&controlRcvWqe, &controlBuffer, MSG_MAX_SIZE, mr_controlBuffer);*/
 
 }
 
@@ -144,20 +134,17 @@ RdmaUdTransport::~RdmaUdTransport() {
 
 int RdmaUdTransport::push(Message* m)
 {
-    //usleep(200); //TODO: Take this out
-    //cerr << "NO PUSH OP" << endl;
 
-    //ibv_mr* mr_msg = create_MEMORY_REGION(&m->buffer, m->bufferSize);
-
-    //initSendWqe(&dataSendWqe, 42);
     updateSendWqe(&dataSendWqe, m->buffer, m->bufferSize, mr_messagePool);
 
     post_SEND_WQE(&dataSendWqe);
 
        DEBUG("DEBUG: Sent Message:\n");
       #ifdef DEBUG_BUILD
-          m->printBuffer(32);
+       printMessage(m, 32);
+       sleep(5);
       #endif
+        DEBUG("DEBUG: WRID(" << dataSendWqe.wr_id << ")\tLength(" << dataSendWqe.sg_list->length << ")\n");
 
       //Wait For Completion
       int ret = 0;
@@ -167,45 +154,41 @@ int RdmaUdTransport::push(Message* m)
           ret = ibv_poll_cq(g_cq, 1, &dataWc);
       } while(ret == 0);
       DEBUG("DEBUG: Received " << ret << " CQE Elements\n");
-      DEBUG("DEBUG: WRID(" << dataWc.wr_id << ")\tStatus(" << dataWc.status << ")\n");
+      DEBUG("DEBUG: WRID(" << dataWc.wr_id << ")\tStatus(" << dataWc.status << ") length( " <<dataWc.byte_len << ")\n");
 
       if(dataWc.status == IBV_WC_RNR_RETRY_EXC_ERR)
       {
           usleep(50); //wait 50 us and we will try again.
-          cerr << "DEBUG: WRID(" << dataWc.wr_id << ")\tStatus(IBV_WC_RNR_RETRY_EXC_ERR)" << endl;
-          //ibv_dereg_mr(mr_msg);
+          std::cerr << "DEBUG: WRID(" << dataWc.wr_id << ")\tStatus(IBV_WC_RNR_RETRY_EXC_ERR)" << std::endl;
           return -1;
       }
       if(dataWc.status != IBV_WC_SUCCESS)
       {
-          cerr << "DEBUG: WRID(" << dataWc.wr_id << ")\tStatus(" << dataWc.status << ")" << endl;
-          //ibv_dereg_mr(mr_msg);
+          std::cerr << "DEBUG: WRID(" << dataWc.wr_id << ")\tStatus(" << dataWc.status << ")" << std::endl;
           return -1;
       }
-
-    //ibv_dereg_mr(mr_msg);
-
-
 
     return 0;
 }
 
 /*
-*  Pulls messages from the transport and places it in the buffer
+*  Pulls messages from the transport and places it in the message block  buffer
 */
-int RdmaUdTransport::pop(Message* m, int numReqMsg, int& numRetMsg, eTransportDest dest)
+int RdmaUdTransport::pop(Message** m, int numReqMsg, int& numRetMsg, eTransportDest dest)
 {
     numRetMsg = 0;
+    Message* msg;
 
     do {
-
         //Post the RcvWQE
+        msg = reinterpret_cast<Message *>(&messagePool[numRetMsg * sizeof(Message)]);
+        updateRecvWqe(&dataRcvWqe, msg->buffer, MSG_MAX_SIZE, mr_messagePool);
         post_RECEIVE_WQE(&dataRcvWqe);
 
         int r = 0;
         DEBUG("DEBUG: Waiting for CQE\n");
         do {
-            r = ibv_poll_cq(g_cq, 1, &dataWc);
+            r = ibv_poll_cq(g_cq, 1, &dataWc); //TODO: We should be pulling 1k messages at a time
         } while (r == 0);
         DEBUG("DEBUG: Received " << r << " CQE Elements\n");
 
@@ -218,14 +201,16 @@ int RdmaUdTransport::pop(Message* m, int numReqMsg, int& numRetMsg, eTransportDe
                                  ")\tSize(" << dataWc.byte_len << ")\n");
         }
 
-        uint8_t* mbuff = this->getMessageBuff();
-        memcpy(mbuff, dataBuffer,dataWc.byte_len);
-        m[numRetMsg-1] = Message(numRetMsg-1, 0, dataWc.byte_len, mbuff); //we can reuse the buffer now.
-        //TODO: Choose to create message buffer in GPU vs CPU Memory.
+        *msg->buffer += 40;
+        msg->bufferSize = dataWc.byte_len - 40;
+        msg->seqNumber = numRetMsg-1;
+        msg->interval = 0;
+        m[numRetMsg-1] = msg;
 
         DEBUG ("DEBUG: Received Message:\n");
         #ifdef DEBUG_BUILD
-        m[numRetMsg-1].printBuffer(32);
+        std::cerr<<"here";
+        ITransport::printMessage(msg, 48);
         #endif
 
     } while(numRetMsg < numReqMsg);
@@ -721,24 +706,29 @@ void RdmaUdTransport::DestroyQP()
 
 }
 
+Message* RdmaUdTransport::createMessage() {
+    Message * m = NULL;
 
-u_int8_t * RdmaUdTransport::getMessageBuff() {
     for(int i = 0; i < MSG_BLOCK_SIZE; i++)
     {
         if(messagePoolSlotFree[i])
         {
-            return &messagePool[i * MSG_BLOCK_SIZE];
+            messagePoolSlotFree[i] = false;
+            m = reinterpret_cast<Message *>(&messagePool[i * sizeof(Message)]);
+            m->seqNumber = 0;
+            m->interval = 0;
+            m->bufferSize = MSG_BLOCK_SIZE;
+            return m;
         }
     }
 
-    return NULL; //We went thorugh the whole Memory Pool and didn't find an open slot.
+    return NULL; //We went through the whole Memory Pool and didn't find an open slot.
 }
 
-
-void RdmaUdTransport::freeMessageBuff(Message* m)
+int RdmaUdTransport::freeMessage(Message* m)
 {
     //TODO: need to find and free this slot in the memory pool.
+    return 0;
 }
-
 
 

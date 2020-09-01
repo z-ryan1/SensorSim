@@ -6,25 +6,25 @@
 #define SENSORSIM_UDP_TRANSPORT_CUH
 
 #include <netinet/in.h>
+#include <unistd.h>
 #include <string>
 #include <vector>
 
 #include "../common.cuh"
-#include "../Message.cuh"
 #include "itransport.cuh"
 
 using namespace std;
 
-class UpdTransport: public ITransport {
+class UdpTransport: public ITransport {
 
 public:
-    UpdTransport(string localAddr, string mcastAddr, eTransportRole role);
+    UdpTransport(string localAddr, string mcastAddr, eTransportRole role);
 
 private:
     int push(Message* msg);
-    int pop(Message msg[MSG_BLOCK_SIZE], int numReqMsg, int& numRetMsg, eTransportDest dest);
-    u_int8_t* getMessageBuff();
-    void freeMessageBuff(Message* m);
+    int pop(Message** msg, int numReqMsg, int& numRetMsg, eTransportDest dest);
+    Message* createMessage();
+    int freeMessage(Message* msg);
 
     struct ip_mreq        mcastGroup;
 

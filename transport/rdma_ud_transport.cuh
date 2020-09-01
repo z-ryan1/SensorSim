@@ -6,6 +6,7 @@
 #define SENSORSIM_RDMA_UD_TRANSPORT_CUH
 
 #include <netinet/in.h>
+#include <unistd.h>
 #include <string>
 #include <vector>
 
@@ -13,7 +14,6 @@
 #include </usr/include/rdma/rdma_cma.h>
 
 #include "../common.cuh"
-#include "../Message.cuh"
 
 #include "itransport.cuh"
 
@@ -22,14 +22,14 @@
 class RdmaUdTransport: public ITransport {
 
 public:
-    RdmaUdTransport(string localAddr, string mcastAddr, eTransportRole role);
+    RdmaUdTransport(std::string localAddr, std::string mcastAddr, eTransportRole role);
     ~RdmaUdTransport();
 
 private:
     int push(Message* msg);
-    int pop(Message msg[MSG_BLOCK_SIZE], int numReqMsg, int& numRetMsg, eTransportDest dest);
-    u_int8_t* getMessageBuff();
-    void freeMessageBuff(Message* m);
+    int pop(Message** msg, int numReqMsg, int& numRetMsg, eTransportDest dest);
+    Message* createMessage();
+    int freeMessage(Message* msg);
 
     struct rdma_event_channel	*g_CMEventChannel;
     struct rdma_cm_id			*g_CMId;
@@ -59,7 +59,7 @@ private:
 
 
 
-    uint8_t                 messagePool[MSG_BLOCK_SIZE * MSG_MAX_SIZE];
+    uint8_t                 messagePool[MSG_BLOCK_SIZE * sizeof(Message)];
     // TODO: this count be a vector to make iter easier
     bool                    messagePoolSlotFree[MSG_BLOCK_SIZE];  //Track which slots in the message pool is available.
     ibv_mr*                 mr_messagePool;

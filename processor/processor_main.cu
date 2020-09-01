@@ -3,7 +3,6 @@
 #include <iostream>
 #include <unistd.h>
 
-#include "../Message.cuh"
 #include "../transport/itransport.cuh"
 #include "../transport/udp_transport.cuh"
 #include "../transport/rdma_ud_transport.cuh"
@@ -15,11 +14,11 @@
 
 void PrintUsage()
 {
-    cout << "usage: processorSim [ -s pcap ] [-m mode] mcast-addr" << endl;
-    cout << "\t multicast group where sensor publishes data" << endl;
-    cout << "\t[-m mode] - run mode: PRINT, NO-PROC, CPU-COUNT, GPU-COUNT (default: PRINT)" << endl;
-    cout << "\t[-t mode] - transport to use: UDP, RDMA-UD, UCX (default: UDP)" << endl;
+    cout << "usage: processorSim [-l local-addr] [-t trans] [-m mode] mcast-addr" << endl;
+    cout << "\t mcast-addr - multicast group where sensor publishes data" << endl;
     cout << "\t[-l local-addr] - local ipv4 addresss to bind. (default: bind to first address)" << endl;
+    cout << "\t[-t trans] - transport to use: UDP, RDMA-UD, UCX (default: UDP)" << endl;
+    cout << "\t[-m mode] - run mode: PRINT, NO-PROC, CPU-COUNT, GPU-COUNT (default: PRINT)" << endl;
 }
 
 int main(int argc,char *argv[], char *envp[]) {
@@ -86,7 +85,7 @@ int main(int argc,char *argv[], char *envp[]) {
     //Create the Transport
     ITransport* t;
     if(tmode == "UDP")
-        t = new UpdTransport(localAddr, mcastAddr, eTransportRole::PROCESSOR);
+        t = new UdpTransport(localAddr, mcastAddr, eTransportRole::PROCESSOR);
     else if(tmode == "RDMA-UD")
         t = new RdmaUdTransport(localAddr , mcastAddr, eTransportRole::PROCESSOR);
 
