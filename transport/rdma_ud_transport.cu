@@ -28,48 +28,6 @@ int get_addr(const char *dst, struct sockaddr *addr)
     return ret;
 }
 
-void PrintCMEvent(struct rdma_cm_event *event)
-{
-    if(event->event == RDMA_CM_EVENT_ADDR_RESOLVED)
-        fprintf(stderr,"DEBUG: Received CM Event(RDMA_CM_EVENT_ADDR_RESOLVED)\n");
-    else if(event->event == RDMA_CM_EVENT_ADDR_RESOLVED)
-        fprintf(stderr,"DEBUG: Received CM Event(RDMA_CM_EVENT_ADDR_RESOLVED)\n");
-    else if(event->event == RDMA_CM_EVENT_ROUTE_RESOLVED)
-        fprintf(stderr,"DEBUG: Received CM Event(RDMA_CM_EVENT_ROUTE_RESOLVED)\n");
-    else if(event->event == RDMA_CM_EVENT_ROUTE_ERROR)
-        fprintf(stderr,"DEBUG: Received CM Event(RDMA_CM_EVENT_ROUTE_ERROR)\n");
-    else if(event->event == RDMA_CM_EVENT_CONNECT_REQUEST)
-        fprintf(stderr,"DEBUG: Received CM Event(RDMA_CM_EVENT_CONNECT_REQUEST)\n");
-    else if(event->event == RDMA_CM_EVENT_CONNECT_RESPONSE)
-        fprintf(stderr,"DEBUG: Received CM Event(RDMA_CM_EVENT_CONNECT_RESPONSE)\n");
-    else if(event->event == RDMA_CM_EVENT_CONNECT_ERROR)
-        fprintf(stderr,"DEBUG: Received CM Event(RDMA_CM_EVENT_CONNECT_ERROR)\n");
-    else if(event->event == RDMA_CM_EVENT_UNREACHABLE)
-        fprintf(stderr,"DEBUG: Received CM Event(RDMA_CM_EVENT_UNREACHABLE)\n");
-    else if(event->event == RDMA_CM_EVENT_REJECTED)
-        fprintf(stderr,"DEBUG: Received CM Event(RDMA_CM_EVENT_REJECTED) Status(%u)", event->status );
-    else if(event->event == RDMA_CM_EVENT_ESTABLISHED)
-        fprintf(stderr,"DEBUG: Received CM Event(RDMA_CM_EVENT_ESTABLISHED)\n");
-    else if(event->event == RDMA_CM_EVENT_DISCONNECTED)
-        fprintf(stderr,"DEBUG: Received CM Event(RDMA_CM_EVENT_DISCONNECTED)\n");
-    else if(event->event == RDMA_CM_EVENT_DEVICE_REMOVAL)
-        fprintf(stderr,"DEBUG: Received CM Event(RDMA_CM_EVENT_DEVICE_REMOVAL)\n");
-    else if(event->event == RDMA_CM_EVENT_MULTICAST_JOIN)
-        fprintf(stderr,"DEBUG: Received CM Event(RDMA_CM_EVENT_MULTICAST_JOIN)\n");
-    else if(event->event == RDMA_CM_EVENT_MULTICAST_ERROR)
-        fprintf(stderr,"DEBUG: Received CM Event(RDMA_CM_EVENT_MULTICAST_ERROR)\n");
-    else if(event->event == RDMA_CM_EVENT_ADDR_CHANGE)
-        fprintf(stderr,"DEBUG: Received CM Event(RDMA_CM_EVENT_ADDR_CHANGE)\n");
-    else if(event->event == RDMA_CM_EVENT_TIMEWAIT_EXIT)
-        fprintf(stderr,"DEBUG: Received CM Event(RDMA_CM_EVENT_TIMEWAIT_EXIT)\n");
-    return;
-}
-
-void PrintConnectionInfo(rdma_conn_param cParam)
-{
-    fprintf(stderr, "DEBUG: QPN(%d)\n", cParam.qp_num);
-}
-
 RdmaUdTransport::RdmaUdTransport(std::string localAddr, std::string mcastAddr, eTransportRole role) {
 
     s_localAddr = localAddr;
@@ -86,7 +44,6 @@ RdmaUdTransport::RdmaUdTransport(std::string localAddr, std::string mcastAddr, e
 
         if(RDMACreateQP() != 0)
         {
-            //TODO: We should be able to start the processes in any order. Need things to wait and retry.
             fprintf(stdout, "Exiting - Failed to Create Queue Pair, make sure processor is running\n");
             exit(EXIT_FAILURE);
         }
@@ -107,14 +64,6 @@ RdmaUdTransport::RdmaUdTransport(std::string localAddr, std::string mcastAddr, e
         exit(EXIT_FAILURE);
     }
 
-    //Initialize the Data Channel
-    mr_dataBuffer = create_MEMORY_REGION(&dataBuffer, MSG_MAX_SIZE);
-    memset(dataBuffer, 0x00, MSG_MAX_SIZE);
-    initSendWqe(&dataSendWqe, 42);
-    updateSendWqe(&dataSendWqe, &dataBuffer, MSG_MAX_SIZE, mr_dataBuffer);
-    initRecvWqe(&dataRcvWqe, 99);
-    updateRecvWqe(&dataRcvWqe, &dataBuffer, MSG_MAX_SIZE, mr_dataBuffer);
-
     //Initialize the Message Buffer Pool
     mr_messagePool = create_MEMORY_REGION(&messagePool, (sizeof(Message) * MSG_BLOCK_SIZE));
     for(int i = 0; i < MSG_BLOCK_SIZE; i++)
@@ -122,14 +71,23 @@ RdmaUdTransport::RdmaUdTransport(std::string localAddr, std::string mcastAddr, e
         messagePoolSlotFree[i] = true;
     }
 
+    initSendWqe(&dataSendWqe, 42);
+    updateSendWqe(&dataSendWqe, &messagePool[0], MSG_MAX_SIZE, mr_messagePool);
+    initRecvWqe(&dataRcvWqe, 99);
+    updateRecvWqe(&dataRcvWqe, &messagePool[0], MSG_MAX_SIZE, mr_messagePool);
+
 }
 
 RdmaUdTransport::~RdmaUdTransport() {
+
     //Clean the RDMA Contexts
     DestroyContext();
     DestroyQP();
 
     ibv_dereg_mr(mr_messagePool);
+
+    //Free all the Memory used in the message block
+    freeMsgBlock();
 }
 
 int RdmaUdTransport::push(Message* m)
@@ -147,7 +105,7 @@ int RdmaUdTransport::push(Message* m)
         DEBUG("DEBUG: WRID(" << dataSendWqe.wr_id << ")\tLength(" << dataSendWqe.sg_list->length << ")\n");
 
       //Wait For Completion
-      int ret = 0;
+      int ret;
 
       DEBUG("DEBUG: Waiting for CQE\n");
       do {
@@ -185,10 +143,11 @@ int RdmaUdTransport::pop(Message** m, int numReqMsg, int& numRetMsg, eTransportD
         updateRecvWqe(&dataRcvWqe, msg->buffer, MSG_MAX_SIZE, mr_messagePool);
         post_RECEIVE_WQE(&dataRcvWqe);
 
-        int r = 0;
+        int r;
         DEBUG("DEBUG: Waiting for CQE\n");
         do {
-            r = ibv_poll_cq(g_cq, 1, &dataWc); //TODO: We should be pulling 1k messages at a time
+            //TODO: We should be pulling block size (1k) messages at a time
+            r = ibv_poll_cq(g_cq, 1, &dataWc);
         } while (r == 0);
         DEBUG("DEBUG: Received " << r << " CQE Elements\n");
 
@@ -216,22 +175,6 @@ int RdmaUdTransport::pop(Message** m, int numReqMsg, int& numRetMsg, eTransportD
     } while(numRetMsg < numReqMsg);
 
     return 0;
-}
-
-/*
- * Returns -1 for error otherwise return Number of Completions Received
- */
-int RdmaUdTransport::PollCQ(ibv_wc* wc)
-{
-    int ret = 0;
-
-    DEBUG("DEBUG: Waiting for CQE\n");
-    do {
-        ret = ibv_poll_cq(g_cq, 1, wc);
-    } while(ret == 0);
-    DEBUG("DEBUG: Received " << ret << " CQE Elements\n");
-    DEBUG("DEBUG: WRID(" << wc->wr_id << ")\tStatus(" << wc->status << ")\n");
-    return ret;
 }
 
 int RdmaUdTransport::initSendWqe(ibv_send_wr* wqe, int i)
@@ -289,15 +232,23 @@ int RdmaUdTransport::updateRecvWqe(ibv_recv_wr *wqe, void *buffer, size_t buffer
     return 0;
 }
 
+/*
+ * puts the work queue element (WQE) on the send queue.
+ * returns: 0 on SUCCESS, -1 on failure
+ */
 int RdmaUdTransport::post_SEND_WQE(ibv_send_wr* ll_wqe)
 {
     int err;
     int ret = 0;
     struct ibv_send_wr *bad_wqe = NULL;
 
-    err = ibv_post_send(g_CMId->qp, ll_wqe, &bad_wqe);
-    while(err != 0)
-    {
+    do{
+        err = ibv_post_send(g_CMId->qp, ll_wqe, &bad_wqe);
+
+        if(err == 0){
+            return 0;
+        }
+
         fprintf(stderr,"ERROR: post_SEND_WQE Error %u\n", err);
         if(err == ENOMEM && ret++ < 10) //Queue Full Wait for CQ Polling Thread to Clear
         {
@@ -309,15 +260,15 @@ int RdmaUdTransport::post_SEND_WQE(ibv_send_wr* ll_wqe)
             fprintf(stderr, "ERROR: Unrecoverable Send Queue, aborting\n");
             return -1;
         }
-    }
 
-    return 0;
+    }while(true);
+
 }
 
 int RdmaUdTransport::post_RECEIVE_WQE(ibv_recv_wr* ll_wqe)
 {
     DEBUG("DEBUG: Enter post_RECEIVE_WQE\n");
-    int ret = 0;
+    int ret;
     struct ibv_recv_wr *bad_wqe = NULL;
 
     ret = ibv_post_recv(g_CMId->qp, ll_wqe, &bad_wqe);
@@ -334,8 +285,7 @@ int RdmaUdTransport::post_RECEIVE_WQE(ibv_recv_wr* ll_wqe)
 ibv_mr* RdmaUdTransport::create_MEMORY_REGION(void* buffer, size_t bufferlen)
 {
     ibv_mr* tmpmr = (ibv_mr*)malloc(sizeof(ibv_mr));
-    //int mr_flags = IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE;
-    int mr_flags = IBV_ACCESS_LOCAL_WRITE;
+    int mr_flags = IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE;
     tmpmr = ibv_reg_mr(g_pd, buffer, bufferlen, mr_flags);
     if(!tmpmr)
     {
@@ -351,40 +301,12 @@ ibv_mr* RdmaUdTransport::create_MEMORY_REGION(void* buffer, size_t bufferlen)
     return tmpmr;
 }
 
-int RdmaUdTransport::GetCMEvent(rdma_cm_event_type* EventType)
-{
-    int ret;
-    struct rdma_cm_event *CMEvent;
-
-    ret = rdma_get_cm_event(g_CMEventChannel, & CMEvent);
-    if(ret != 0)
-    {
-        fprintf(stderr,"ERROR: No CM Event Received in Time Out\n");
-        return -1;
-    }
-    *EventType = CMEvent->event;
-    PrintCMEvent(CMEvent);
-
-    /*
-     * Release the Event now that we are done with it
-     */
-    ret=rdma_ack_cm_event(CMEvent);
-    if(ret != 0)
-    {
-        fprintf(stderr,"ERROR: CM couldn't release CM Event\n");
-        return -1;
-    }
-
-    return 0;
-
-}
-
 /*
  * Create the CM Event Channel, the Connection Identifier, Bind the application to a local address
  */
 int RdmaUdTransport::RDMACreateContext()
 {
-    int ret = 0;
+    int ret;
     struct rdma_cm_event *CMEvent;
 
     // Open a Channel to the Communication Manager used to receive async events from the CM.
@@ -504,7 +426,7 @@ int RdmaUdTransport::RDMACreateQP()
 
 int RdmaUdTransport::RdmaMcastConnect()
 {
-    int ret = 0;
+    int ret;
     struct rdma_cm_event *CMEvent;
 
     ret = rdma_join_multicast(g_CMId, (struct sockaddr*)&mcastAddr_in, NULL);
@@ -543,127 +465,6 @@ int RdmaUdTransport::RdmaMcastConnect()
     }
 
 
-
-    return 0;
-}
-
-int RdmaUdTransport::RDMAClientConnect()
-{
-    int ret;
-    rdma_cm_event_type et;
-
-    //rdma resolve route
-    ret = rdma_resolve_route(g_CMId, 2000);
-    if(ret != 0)
-    {
-        fprintf(stderr, "ERROR: RDMAClientConnect: Couldn't resolve the Route\n");
-        return -1;
-    }
-
-    fprintf(stderr, "DEBUG: Waiting for Resolve Route CM Event ...\n");
-    do
-    {
-        ret = GetCMEvent(&et);
-        if(ret != 0)
-        {
-            fprintf(stderr, "ERROR: Processing CM Events\n");
-        }
-    } while(et != RDMA_CM_EVENT_ROUTE_RESOLVED);
-
-    fprintf(stderr, "DEBUG: Waiting for Connection Established Event ...\n");
-
-    struct rdma_conn_param ConnectionParams;
-
-    memset(&ConnectionParams, 0, sizeof(ConnectionParams));
-    ret = rdma_connect(g_CMId, &ConnectionParams);
-    if(ret != 0)
-    {
-        fprintf(stderr, "ERROR: Client Couldn't Establish Connection\n");
-        return -1;
-    }
-
-    PrintConnectionInfo(ConnectionParams);
-
-    do
-    {
-        ret = GetCMEvent(&et);
-        if(ret != 0)
-        {
-            fprintf(stderr, "ERROR: Processing CM Events\n");
-        }
-    } while(et != RDMA_CM_EVENT_ESTABLISHED);
-
-
-
-    return 0;
-}
-
-int RdmaUdTransport::RDMAServerConnect()
-{
-    int ret;
-    struct rdma_cm_event *CMEvent;
-    rdma_cm_event_type et;
-
-    /*
-     * Wait for the Connect REquest to Come From the Client
-     */
-    do
-    {
-        ret = rdma_get_cm_event(g_CMEventChannel, & CMEvent);
-        if(ret != 0)
-        {
-            fprintf(stderr, "ERROR: No Event Received Time Out\n");
-            return -1;
-        }
-
-        PrintCMEvent(CMEvent);
-    } while(CMEvent->event != RDMA_CM_EVENT_CONNECT_REQUEST);
-
-    /*
-     * Get the CM Id from the Event
-     */
-
-    g_CMId = CMEvent->id;
-    /*
-     * Now we can create the QP
-     */
-    ret = RDMACreateQP();
-    if(ret != 0)
-    {
-        fprintf(stderr, "ERROR: RDMAServerConnect - Couldn't Create QP\n");
-        return -1;
-    }
-
-    struct rdma_conn_param ConnectionParams;
-    memset(&ConnectionParams, 0, sizeof(ConnectionParams));
-    ret = rdma_accept(g_CMId, &ConnectionParams);
-    if(ret != 0)
-    {
-        fprintf(stderr, "ERROR: Client Couldn't Establish Connection\n");
-        return -1;
-    }
-
-    PrintConnectionInfo(ConnectionParams);
-
-    /*
-     * Release the Event now that we are done with it
-     */
-    ret=rdma_ack_cm_event(CMEvent);
-    if(ret != 0)
-    {
-        fprintf(stderr, "ERROR: couldn't release CM Event\n");
-        return -1;
-    }
-
-    fprintf(stderr, "DEBUG: Waiting for Connection Established Event ...\n");
-    do
-    {
-        ret = GetCMEvent(&et);
-        if(ret != 0)
-        {
-            fprintf(stderr, "ERROR: Processing CM Events\n");
-        }
-    } while(et != RDMA_CM_EVENT_ESTABLISHED);
 
     return 0;
 }
@@ -728,6 +529,15 @@ Message* RdmaUdTransport::createMessage() {
 int RdmaUdTransport::freeMessage(Message* m)
 {
     //TODO: need to find and free this slot in the memory pool.
+    return 0;
+}
+
+int RdmaUdTransport::freeMsgBlock()
+{
+    for(int i = 0; i < MSG_BLOCK_SIZE; i++) {
+        messagePoolSlotFree[i] = true;
+        freeMessage(reinterpret_cast<Message *>(messagePool[i]));
+    }
     return 0;
 }
 
