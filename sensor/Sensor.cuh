@@ -10,7 +10,6 @@
 #include <pcap.h>
 
 #include "../common.cuh"
-#include "../Message.cuh"
 #include "../transport/itransport.cuh"
 
 class Sensor {
@@ -20,7 +19,7 @@ public:
 
     //Flow Creation Functions
     int createRandomFlow(int msgLength, int numMsg);
-    int createPCAPFlow(string fileName);
+    int createPCAPFlow(std::string fileName);
 
     int getFlowLength();
 
@@ -29,7 +28,7 @@ public:
     int sendFlow();
 
 private:
-    vector<Message*> flow;
+    std::vector<Message*> flow;
     ITransport* transport;
 
 };

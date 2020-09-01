@@ -8,7 +8,7 @@ Sensor::Sensor(ITransport* t) {
     transport = t;
 }
 
-int Sensor::createPCAPFlow(string fileName)
+int Sensor::createPCAPFlow(std::string fileName)
 {
     //Get the Message count
     pcap_t *handle;
@@ -19,7 +19,7 @@ int Sensor::createPCAPFlow(string fileName)
     handle = pcap_open_offline(fileName.c_str(), errbuf);
 
     if (handle == nullptr) {
-        cout << "Couldn't open pcap file "<< fileName << ":" << errbuf << endl;
+        std::cout << "Couldn't open pcap file "<< fileName << ":" << errbuf << std::endl;
         return(2);
     }
 
@@ -40,12 +40,15 @@ int Sensor::createPCAPFlow(string fileName)
         //deltaSec = (header->ts.tv_sec) - lastMsgSec; //TODO: Calculating Message interval factor in > 1 Second delays
         deltaUSec = (header->ts.tv_usec) - lastMsgUsec;
 
-        uint8_t* buffer;
-       buffer = transport->getMessageBuff();
-        memcpy(buffer, data, header->caplen);
+        m = transport->createMessage();
+        m->seqNumber = i++;
+        m->interval = deltaUSec;
+        m->bufferSize = header->caplen;
+        memcpy(m->buffer, data, header->caplen);
 
-        m = new Message(i++, deltaUSec, header->caplen, (uint8_t*)data); //Cast from uchar
-        cout << "Adding to flow: " << *m << endl;
+        std::cout << "Adding to flow: ";
+        transport->printMessage(m, 0);
+        std::cout << std::endl;
 
         flow.push_back(m);
     }
@@ -53,19 +56,34 @@ int Sensor::createPCAPFlow(string fileName)
     return 0;
 }
 
+/*
+ * Create a flow of messages to be sent from the sensor. The messages will be alocated in an appropriate message buffer
+ * depending on the transport. The flow will be sent multiple times. The number of messages in the flow shouldn't exceed
+ * the MSG_BLOCK_SIZE for this simulator.
+ */
 int Sensor::createRandomFlow(int msgLength, int numMsg) {
+
+    if(numMsg > MSG_BLOCK_SIZE)
+    {
+        std::cerr << "ERROR - Requesting to create a flow longer than the Message Buffer.";
+        return -1;
+    }
 
     for(int i=0; i<numMsg; ++i)
     {
-        //Create Random Message
-        uint8_t * buffer = transport->getMessageBuff();
+       DEBUG("FLOW Creation: Message # " << i << "\n");
+       Message* m = NULL;
+       m = transport->createMessage();
+       m->seqNumber = i;
+       m->interval = 100;
+       m->bufferSize = msgLength;
         for(int j = 0; j < msgLength; ++j)
         {
             int r = (uint8_t)((rand()%256)+1);
-            buffer[j]= r;
+            m->buffer[j]= r;
         }
-        Message* m = new Message(i, 100, msgLength, buffer);
         flow.push_back(m);
+
     }
 
     return 0;
@@ -74,7 +92,7 @@ int Sensor::createRandomFlow(int msgLength, int numMsg) {
 void Sensor::printFlow() {
     // loop through the messages and print as hexidecimal representations of octets
     for (int i=0; (i < flow.size() ) ; i++) {
-      flow[i]->printBuffer(32);
+      transport->printMessage(flow[i], 32);
       printf("\n\n ");
     }
 

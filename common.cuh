@@ -8,10 +8,10 @@
 #include <iostream>
 #include <chrono>
 
-// #define DEBUG_BUILD
+//#define DEBUG_BUILD
 
 #ifdef DEBUG_BUILD
-#define DEBUG(x) cerr << x
+#define DEBUG(x) std::cerr << x
 #define DEBUG_DETAIL(x) x
 #else
 #  define DEBUG(x) do {} while (0)
@@ -20,10 +20,8 @@
 
 #define PRINT_UPDATE_DELAY 1    //Used with timer
 
-#define MSG_MAX_SIZE 1500       //Max size of a message in a flow, must be > RAND_FLOW_MSG_SIZE or max size message from pcap
-#define MSG_BLOCK_SIZE 1000     //Number of messages to process in parallel
-
-//Sensor Defines
+#define MSG_MAX_SIZE 1500       //Max size of a message must be > RAND_FLOW_MSG_SIZE or max size message from pcap
+#define MSG_BLOCK_SIZE 1024     //Number of messages to process in parallel
 #define RAND_FLOW_MSG_SIZE 1024     //Size of the Messages in Random Flow
 #define RAND_FLOW_MSG_COUNT 1024    //Number of Messages in the Flow
 

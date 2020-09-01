@@ -5,7 +5,6 @@
 #include <chrono>
 
 #include "../common.cuh"
-#include "../Message.cuh"
 #include "../transport/itransport.cuh"
 #include "../transport/udp_transport.cuh"
 #include "../transport/rdma_ud_transport.cuh"
@@ -79,7 +78,7 @@ int main(int argc,char *argv[], char *envp[]) {
     //Create the Transport
     ITransport* t;
     if(tmode == "UDP")
-        t = new UpdTransport(srcAddr, mcastAddr, eTransportRole::SENSOR);
+        t = new UdpTransport(srcAddr, mcastAddr, eTransportRole::SENSOR);
     else if(tmode == "RDMA-UD")
         t = new RdmaUdTransport(srcAddr, mcastAddr, eTransportRole::SENSOR);
 

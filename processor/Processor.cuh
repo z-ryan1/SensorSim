@@ -6,10 +6,9 @@
 #define SENSORSIM_PROCESSOR_CUH
 
 #include <unistd.h>
-#include <chrono>
 #include <assert.h>
 
-#include "../Message.cuh"
+#include "../common.cuh"
 #include "../transport/itransport.cuh"
 
 __global__ void gpu_count_zeros(Message* flow, int* sum, int flowLength);
@@ -24,9 +23,7 @@ public:
     //pop a message and process if you get one.
     int procPrintMessages(int minMsg);
     int procCountZerosCPU(int minMsg);
-
     void procCountZerosGPU(int i);
-
     void procDropMsg(int i);
 
 private:
