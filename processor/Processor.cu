@@ -13,16 +13,16 @@ inline cudaError_t checkCuda(cudaError_t result)
     return result;
 }
 
-__global__ void gpu_count_zeros(Message* flow, int* sum, int flowLength)
+__global__ void gpu_count_zeros(Message** flow, int* sum, int flowLength)
 {
     int indx = blockDim.x * blockIdx.x + threadIdx.x;
     int stride = blockDim.x * gridDim.x;
 
     for(int i = indx; i < flowLength; i += stride)
     {
-        for(int j = 0; j < flow[i].bufferSize; j++)
+        for(int j = 0; j < flow[i]->bufferSize; j++)
         {
-            if(flow[i].buffer[j] == 0)
+            if(flow[i]->buffer[j] == 0)
             {
                 sum[i] += 1;
                 //cout << "found a zero at msg[" << i << "] byte[" << j << "]" << endl;
@@ -53,7 +53,7 @@ Processor::Processor(ITransport* t) {
 }
 
 void Processor::procCountZerosGPU(int minMessageToProcess) {
-    /*timer t;
+    timer t;
 
     int deviceId;
     int numberOfSMs;
@@ -120,7 +120,7 @@ void Processor::procCountZerosGPU(int minMessageToProcess) {
     std::cout << "\n Processing Completed: " << std::endl;
     std::cout << "\t processed " << processedMessages << " in " << t.seconds_elapsed() << " sec" << std::endl;
     std::cout << "\t total zero's in messages = " << sum << std::endl;
-     */
+
     exit(EXIT_SUCCESS);
 }
 

@@ -8,7 +8,7 @@
 #include "../transport/rdma_ud_transport.cuh"
 
 
-#define MIN_MSG_TO_PRINT    10
+#define MIN_MSG_TO_PRINT    100
 #define MIN_MSG_TO_PROCESS  10'000'000  //CPU count our GPU count
 
 
