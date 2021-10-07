@@ -5,3 +5,6 @@
 /cmake-build-default/
 /cmake-build-default-remote-host-dev1-cuda/
 /CMakeFiles/
+/.vscode/
+/bin/
+
